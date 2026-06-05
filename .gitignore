@@ -1,0 +1,14 @@
+node_modules/
+.env
+*.log
+dist/
+.DS_Store
+coverage/
+server/uploads/driver-docs/*.jpg
+server/uploads/driver-docs/*.jpeg
+server/uploads/driver-docs/*.png
+server/uploads/driver-docs/*.webp
+README.md
+tasks.md
+AGENTS.md
+COMMANDS.md

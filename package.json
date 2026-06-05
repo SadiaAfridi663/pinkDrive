@@ -1,0 +1,25 @@
+{
+  "name": "pinkdrive",
+  "version": "1.0.0",
+  "description": "PinkDrive – Women-Only Ride Booking Web Application Final Year Project Proposal",
+  "main": "index.js",
+  "scripts": {
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "dev": "npm run dev:server & npm run dev:client",
+    "install:all": "npm install && npm install --prefix server && npm install --prefix client",
+    "seed": "npm run seed --prefix server",
+    "lint": "eslint . --ext .js,.jsx --ignore-pattern node_modules --ignore-pattern dist",
+    "format": "prettier --write \"**/*.{js,jsx,json,css,md}\" --ignore-path .gitignore",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.4.1",
+    "prettier": "^3.8.3"
+  }
+}
