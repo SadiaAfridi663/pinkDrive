@@ -4,8 +4,13 @@ import { rideAPI } from '../services/api';
 import { AuthContext } from '../context/AuthContext';
 import { useContext } from 'react';
 
+const API_URL = import.meta.env.VITE_API_URL
+  ? import.meta.env.VITE_API_URL.replace('/api', '')
+  : 'http://localhost:5000';
+
 function PassengerDashboard() {
   const [activeRide, setActiveRide] = useState(null);
+  const [activeDriver, setActiveDriver] = useState(null);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const { user } = useContext(AuthContext);
@@ -20,7 +25,9 @@ function PassengerDashboard() {
           rideAPI.getHistory().catch(() => ({ data: { data: { rides: [] } } })),
         ]);
         if (mounted) {
-          setActiveRide(activeRes.data.data.ride);
+          const active = activeRes.data.data;
+          setActiveRide(active.ride);
+          setActiveDriver(active.driver);
           setHistory(historyRes.data.data.rides.slice(0, 5));
         }
       } catch {
@@ -58,15 +65,48 @@ function PassengerDashboard() {
               <span className={`badge badge--${activeRide.status}`}>{activeRide.status}</span>
             </div>
             <p className="ride-card-status">{statusDisplay[activeRide.status]}</p>
+
+            {activeDriver && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem', padding: '0.75rem', background: 'var(--off-white)', borderRadius: 'var(--radius-sm)' }}>
+                {activeDriver.profilePhoto ? (
+                  <img
+                    src={`${API_URL}/${activeDriver.profilePhoto.replace(/\\/g, '/')}`}
+                    alt={activeDriver.name}
+                    style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--border)' }}
+                    onError={(e) => { e.target.style.display = 'none'; }}
+                  />
+                ) : (
+                  <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--pink-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', color: 'var(--pink)' }}>
+                    {activeDriver.name?.[0] || 'D'}
+                  </div>
+                )}
+                <div>
+                  <p style={{ margin: 0, fontWeight: 600, color: 'var(--plum)', fontSize: '0.95rem' }}>{activeDriver.name}</p>
+                </div>
+              </div>
+            )}
+
             <div className="ride-card-details">
               <div className="ride-detail">
                 <span className="ride-detail-label">Pickup</span>
-                <span className="ride-detail-value">{activeRide.pickupLat?.toFixed(4)}, {activeRide.pickupLng?.toFixed(4)}</span>
+                <span className="ride-detail-value">{activeRide.pickupAddress || `${activeRide.pickupLat?.toFixed(4)}, ${activeRide.pickupLng?.toFixed(4)}`}</span>
               </div>
               <div className="ride-detail">
                 <span className="ride-detail-label">Drop-off</span>
-                <span className="ride-detail-value">{activeRide.dropoffLat?.toFixed(4)}, {activeRide.dropoffLng?.toFixed(4)}</span>
+                <span className="ride-detail-value">{activeRide.dropoffAddress || `${activeRide.dropoffLat?.toFixed(4)}, ${activeRide.dropoffLng?.toFixed(4)}`}</span>
               </div>
+              {activeRide.distance && (
+                <div className="ride-detail">
+                  <span className="ride-detail-label">Distance</span>
+                  <span className="ride-detail-value">{activeRide.distance} km</span>
+                </div>
+              )}
+              {activeRide.fare > 0 && (
+                <div className="ride-detail">
+                  <span className="ride-detail-label">Fare</span>
+                  <span className="ride-detail-value" style={{ fontWeight: 700 }}>{activeRide.fare} PKR</span>
+                </div>
+              )}
             </div>
             <button className="btn btn-primary" onClick={() => navigate('/ride/active')}>
               View Details
@@ -89,10 +129,14 @@ function PassengerDashboard() {
           <h3 className="section-title">Recent Rides</h3>
           <div className="history-list">
             {history.map((r) => (
-              <div key={r.id} className="history-row">
+              <div key={r.id} className="history-row" style={{ cursor: 'pointer' }} onClick={() => navigate(`/ride/${r.id}`)}>
                 <div className="history-row-left">
-                  <span className="history-route">{r.pickupLat?.toFixed(2)}, {r.pickupLng?.toFixed(2)} &rarr; {r.dropoffLat?.toFixed(2)}, {r.dropoffLng?.toFixed(2)}</span>
-                  <span className="history-date">{new Date(r.createdAt).toLocaleDateString()}</span>
+                  <span className="history-route">
+                    {r.driver ? `${r.driver.name} · ` : ''}{r.pickupAddress || `${r.pickupLat?.toFixed(2)}, ${r.pickupLng?.toFixed(2)}`} &rarr; {r.dropoffAddress || `${r.dropoffLat?.toFixed(2)}, ${r.dropoffLng?.toFixed(2)}`}
+                  </span>
+                  <span className="history-date">
+                    {r.distance ? `${r.distance} km · ` : ''}{r.fare ? `${r.fare} PKR · ` : ''}{new Date(r.createdAt).toLocaleDateString()}
+                  </span>
                 </div>
                 <span className={`badge badge--${r.status}`}>{r.status}</span>
               </div>

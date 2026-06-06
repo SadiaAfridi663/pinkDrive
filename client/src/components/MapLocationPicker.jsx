@@ -12,9 +12,19 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-function MapLocationPicker({ onSelect, label, initialPosition }) {
+const GREEN_ICON = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
+});
+
+function MapLocationPicker({ onSelect, label, initialPosition, otherMarker }) {
   const mapRef = useRef(null);
   const markerRef = useRef(null);
+  const otherMarkerRef = useRef(null);
   const containerRef = useRef(null);
 
   useEffect(() => {
@@ -56,6 +66,22 @@ function MapLocationPicker({ onSelect, label, initialPosition }) {
       mapRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+    if (otherMarker) {
+      if (otherMarkerRef.current) {
+        otherMarkerRef.current.setLatLng([otherMarker.lat, otherMarker.lng]);
+      } else {
+        otherMarkerRef.current = L.marker([otherMarker.lat, otherMarker.lng], { icon: GREEN_ICON })
+          .addTo(mapRef.current)
+          .bindPopup('Pickup');
+      }
+    } else if (otherMarkerRef.current) {
+      mapRef.current.removeLayer(otherMarkerRef.current);
+      otherMarkerRef.current = null;
+    }
+  }, [otherMarker]);
 
   return (
     <div className="map-picker">

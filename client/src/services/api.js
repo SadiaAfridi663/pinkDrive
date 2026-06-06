@@ -26,6 +26,7 @@ export const authAPI = {
   getMe: () => api.get('/auth/me'),
   logout: () => api.post('/auth/logout'),
   verifyEmail: (token) => api.post('/auth/verify', { token }),
+  resendVerification: (email) => api.post('/auth/resend-verification', { email }),
 };
 
 export const driverAPI = {
@@ -49,12 +50,19 @@ export const rideAPI = {
     api.post(`/rides/${rideId}/selfie`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
+  uploadTempSelfie: (formData) =>
+    api.post('/rides/selfie/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
   getActiveRide: () => api.get('/rides/active'),
   getPendingRides: () => api.get('/rides/pending'),
   acceptRide: (rideId) => api.patch(`/rides/${rideId}/accept`),
   updateStatus: (rideId, status) => api.patch(`/rides/${rideId}/status`, { status }),
   cancelRide: (rideId) => api.patch(`/rides/${rideId}/cancel`),
   getHistory: () => api.get('/rides/history'),
+  getRideById: (rideId) => api.get(`/rides/${rideId}`),
+  updateDriverLocation: (rideId, lat, lng) => api.patch(`/rides/${rideId}/driver-location`, { lat, lng }),
+  getNearbyDrivers: (lat, lng, radius) => api.get('/rides/nearby-drivers', { params: { lat, lng, radius } }),
 };
 
 export default api;

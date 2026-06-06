@@ -1,17 +1,25 @@
 const { Op } = require('sequelize');
 const User = require('../models/User');
 const Ride = require('../models/Ride');
+const DriverDocument = require('../models/DriverDocument');
 const AppError = require('../utils/AppError');
 const catchAsync = require('../utils/catchAsync');
 const logger = require('../utils/logger');
+const { reverseGeocodeBoth, haversineDistance, fileToUrl } = require('../utils/geo');
+const { getOnlineDrivers } = require('../sockets');
 
 const RIDE_STATUS_FLOW = ['pending', 'accepted', 'arrived', 'in_progress', 'completed'];
+const FARE_PER_KM = 50;
 
 exports.createRide = catchAsync(async (req, res, next) => {
-  const { pickupLat, pickupLng, pickupAddress, dropoffLat, dropoffLng, dropoffAddress, selfiePath } = req.body;
+  const { pickupLat, pickupLng, dropoffLat, dropoffLng, selfiePath, paymentMethod } = req.body;
 
   if (!pickupLat || !pickupLng || !dropoffLat || !dropoffLng) {
     return next(new AppError('Pickup and drop-off locations are required.', 400));
+  }
+
+  if (!selfiePath) {
+    return next(new AppError('Selfie is required before requesting a ride.', 400));
   }
 
   const active = await Ride.findOne({
@@ -25,16 +33,24 @@ exports.createRide = catchAsync(async (req, res, next) => {
     return next(new AppError('You already have an active ride.', 400));
   }
 
+  const [pickupAddress, dropoffAddress] = await reverseGeocodeBoth(pickupLat, pickupLng, dropoffLat, dropoffLng);
+
+  const distance = haversineDistance(pickupLat, pickupLng, dropoffLat, dropoffLng);
+  const fare = Math.round(distance * FARE_PER_KM * 100) / 100;
+
   const ride = await Ride.create({
     passengerId: req.user.id,
     pickupLat,
     pickupLng,
-    pickupAddress: pickupAddress || '',
+    pickupAddress,
     dropoffLat,
     dropoffLng,
-    dropoffAddress: dropoffAddress || '',
-    selfiePath: selfiePath || null,
-    fare: 0,
+    dropoffAddress,
+    selfiePath,
+    distance,
+    fare,
+    paymentMethod: paymentMethod || 'cash',
+    paymentStatus: 'pending',
     status: 'pending',
   });
 
@@ -72,6 +88,16 @@ exports.uploadSelfie = catchAsync(async (req, res, next) => {
   });
 });
 
+exports.uploadTempSelfie = catchAsync(async (req, res, next) => {
+  if (!req.file) {
+    return next(new AppError('Selfie image is required.', 400));
+  }
+  res.status(200).json({
+    success: true,
+    data: { selfiePath: fileToUrl(req.file.path) },
+  });
+});
+
 exports.getActiveRide = catchAsync(async (req, res, next) => {
   const where = {
     [Op.or]: [
@@ -88,17 +114,33 @@ exports.getActiveRide = catchAsync(async (req, res, next) => {
     return res.status(200).json({ success: true, data: { ride: null } });
   }
 
-  const driver = ride.driverId ? await User.findByPk(ride.driverId, {
-    attributes: ['id', 'name', 'phone'],
-  }) : null;
+  let driver = null;
+  if (ride.driverId) {
+    driver = await User.findByPk(ride.driverId, {
+      attributes: ['id', 'name', 'phone'],
+    });
+    const profileDoc = await DriverDocument.findOne({
+      where: { userId: ride.driverId, documentType: 'profile_photo', status: 'approved' },
+    });
+    if (driver) {
+      driver = driver.toJSON();
+      driver.profilePhoto = profileDoc ? fileToUrl(profileDoc.filePath) : null;
+    }
+  }
 
   const passenger = await User.findByPk(ride.passengerId, {
     attributes: ['id', 'name'],
   });
 
+  let passengerJson = null;
+  if (passenger) {
+    passengerJson = passenger.toJSON();
+    passengerJson.selfiePath = ride.selfiePath ? fileToUrl(ride.selfiePath) : null;
+  }
+
   res.status(200).json({
     success: true,
-    data: { ride, driver, passenger },
+    data: { ride, driver, passenger: passengerJson },
   });
 });
 
@@ -152,13 +194,31 @@ exports.acceptRide = catchAsync(async (req, res, next) => {
   ride.driverId = req.user.id;
   ride.status = 'accepted';
   ride.startedAt = new Date();
+  if (driver.currentLat && driver.currentLng) {
+    ride.driverLat = driver.currentLat;
+    ride.driverLng = driver.currentLng;
+  }
   await ride.save();
+
+  const profileDoc = await DriverDocument.findOne({
+    where: { userId: req.user.id, documentType: 'profile_photo', status: 'approved' },
+  });
+
+  const driverJson = driver.toJSON();
+  driverJson.profilePhoto = profileDoc ? fileToUrl(profileDoc.filePath) : null;
+
+  const passenger = await User.findByPk(ride.passengerId, { attributes: ['id', 'name'] });
+  let passengerJson = null;
+  if (passenger) {
+    passengerJson = passenger.toJSON();
+    passengerJson.selfiePath = ride.selfiePath ? fileToUrl(ride.selfiePath) : null;
+  }
 
   logger.info(`Ride ${ride.id} accepted by driver ${req.user.email}`);
 
   res.status(200).json({
     success: true,
-    data: { ride },
+    data: { ride, driver: driverJson, passenger: passengerJson },
     message: 'Ride accepted. Proceed to pickup.',
   });
 });
@@ -232,5 +292,114 @@ exports.getRideHistory = catchAsync(async (req, res, next) => {
     limit: 50,
   });
 
-  res.status(200).json({ success: true, data: { rides } });
+  const driverIds = [...new Set(rides.map((r) => r.driverId).filter(Boolean))];
+  const passengerIds = [...new Set(rides.map((r) => r.passengerId).filter(Boolean))];
+  const [drivers, passengers] = await Promise.all([
+    User.findAll({ where: { id: driverIds }, attributes: ['id', 'name', 'phone'] }),
+    User.findAll({ where: { id: passengerIds }, attributes: ['id', 'name'] }),
+  ]);
+  const driverMap = Object.fromEntries(drivers.map((d) => [d.id, d]));
+  const passengerMap = Object.fromEntries(passengers.map((p) => [p.id, p]));
+
+  const data = rides.map((r) => ({
+    ...r.toJSON(),
+    driver: r.driverId ? driverMap[r.driverId] || null : null,
+    passenger: r.passengerId ? passengerMap[r.passengerId] || null : null,
+  }));
+
+  res.status(200).json({ success: true, data: { rides: data } });
+});
+
+exports.getRideById = catchAsync(async (req, res, next) => {
+  const ride = await Ride.findByPk(req.params.id);
+  if (!ride) return next(new AppError('Ride not found.', 404));
+  if (ride.passengerId !== req.user.id && ride.driverId !== req.user.id) {
+    return next(new AppError('Unauthorized.', 403));
+  }
+
+  let driver = null;
+  let passenger = null;
+  if (ride.driverId) {
+    driver = await User.findByPk(ride.driverId, { attributes: ['id', 'name', 'phone'] });
+    const profileDoc = await DriverDocument.findOne({
+      where: { userId: ride.driverId, documentType: 'profile_photo', status: 'approved' },
+    });
+    if (driver) {
+      driver = driver.toJSON();
+      driver.profilePhoto = profileDoc ? fileToUrl(profileDoc.filePath) : null;
+    }
+  }
+  passenger = await User.findByPk(ride.passengerId, { attributes: ['id', 'name'] });
+  if (passenger) {
+    passenger = passenger.toJSON();
+    passenger.selfiePath = ride.selfiePath ? fileToUrl(ride.selfiePath) : null;
+  }
+
+  res.status(200).json({ success: true, data: { ride, driver, passenger } });
+});
+
+exports.updateDriverLocation = catchAsync(async (req, res, next) => {
+  const { lat, lng } = req.body;
+  if (lat == null || lng == null) {
+    return next(new AppError('Latitude and longitude are required.', 400));
+  }
+
+  const ride = await Ride.findByPk(req.params.id);
+  if (!ride) return next(new AppError('Ride not found.', 404));
+  if (ride.driverId !== req.user.id) {
+    return next(new AppError('Only the assigned driver can update location.', 403));
+  }
+
+  ride.driverLat = lat;
+  ride.driverLng = lng;
+  await ride.save();
+
+  res.status(200).json({ success: true, message: 'Location updated.' });
+});
+
+exports.getNearbyDrivers = catchAsync(async (req, res, next) => {
+  const { lat, lng, radius } = req.query;
+  if (!lat || !lng) {
+    return next(new AppError('Latitude and longitude are required.', 400));
+  }
+
+  const maxDist = parseFloat(radius) || 10;
+  const centerLat = parseFloat(lat);
+  const centerLng = parseFloat(lng);
+
+  const drivers = await Ride.findAll({
+    where: {
+      driverId: { [Op.ne]: null },
+      status: { [Op.notIn]: ['completed', 'cancelled'] },
+    },
+    attributes: ['driverId'],
+  });
+  const busyDriverIds = new Set(drivers.map((r) => r.driverId));
+
+  const activeDriverIds = Object.keys(getOnlineDrivers());
+
+  const available = await User.findAll({
+    where: {
+      id: activeDriverIds,
+      role: 'driver',
+      isDriverVerified: true,
+      currentLat: { [Op.ne]: null },
+      currentLng: { [Op.ne]: null },
+    },
+    attributes: ['id', 'name', 'currentLat', 'currentLng', 'lastActiveAt'],
+  });
+
+  const nearby = available.filter((d) => {
+    if (busyDriverIds.has(d.id)) return false;
+    const dist = haversineDistance(centerLat, centerLng, d.currentLat, d.currentLng);
+    return dist <= maxDist;
+  }).map((d) => ({
+    id: d.id,
+    name: d.name,
+    lat: d.currentLat,
+    lng: d.currentLng,
+    lastActiveAt: d.lastActiveAt,
+  }));
+
+  res.status(200).json({ success: true, data: { drivers: nearby } });
 });

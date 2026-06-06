@@ -11,6 +11,10 @@ const {
   updateRideStatus,
   cancelRide,
   getRideHistory,
+  getRideById,
+  updateDriverLocation,
+  getNearbyDrivers,
+  uploadTempSelfie,
 } = require('../controllers/rideController');
 
 const router = express.Router();
@@ -25,8 +29,16 @@ router.post(
     body('pickupLng').isFloat().withMessage('Pickup longitude required.'),
     body('dropoffLat').isFloat().withMessage('Drop-off latitude required.'),
     body('dropoffLng').isFloat().withMessage('Drop-off longitude required.'),
+    body('paymentMethod').optional().isIn(['cash', 'stripe', 'card']).withMessage('Payment method must be cash, stripe, or card.'),
   ],
   createRide,
+);
+
+router.post(
+  '/selfie/upload',
+  authorize('passenger'),
+  upload.single('selfie'),
+  uploadTempSelfie,
 );
 
 router.post(
@@ -52,5 +64,16 @@ router.patch(
 router.patch('/:id/cancel', authorize('passenger'), cancelRide);
 
 router.get('/history', getRideHistory);
+
+router.get('/nearby-drivers', getNearbyDrivers);
+
+router.get('/:id', getRideById);
+
+router.patch(
+  '/:id/driver-location',
+  authorize('driver'),
+  [body('lat').isFloat(), body('lng').isFloat()],
+  updateDriverLocation,
+);
 
 module.exports = router;

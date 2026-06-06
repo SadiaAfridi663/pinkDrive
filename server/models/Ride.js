@@ -57,7 +57,39 @@ const Ride = sequelize.define('Ride', {
     type: DataTypes.DECIMAL(10, 2),
     defaultValue: 0,
   },
+  paymentMethod: {
+    type: DataTypes.STRING,
+    defaultValue: 'cash',
+    allowNull: false,
+    validate: {
+      isIn: [['cash', 'stripe', 'card']],
+    },
+  },
+  paymentStatus: {
+    type: DataTypes.STRING,
+    defaultValue: 'pending',
+    allowNull: false,
+    validate: {
+      isIn: [['pending', 'paid', 'failed', 'refunded']],
+    },
+  },
   distance: {
+    type: DataTypes.FLOAT,
+    allowNull: true,
+  },
+  driverLat: {
+    type: DataTypes.FLOAT,
+    allowNull: true,
+  },
+  driverLng: {
+    type: DataTypes.FLOAT,
+    allowNull: true,
+  },
+  passengerLat: {
+    type: DataTypes.FLOAT,
+    allowNull: true,
+  },
+  passengerLng: {
     type: DataTypes.FLOAT,
     allowNull: true,
   },

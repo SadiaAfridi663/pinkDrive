@@ -3,6 +3,9 @@ dotenv.config();
 
 const { sequelize } = require('./config/db.sql');
 const User = require('./models/User');
+const DriverDocument = require('./models/DriverDocument');
+const Ride = require('./models/Ride');
+const PendingRegistration = require('./models/PendingRegistration');
 
 const seed = async () => {
   try {

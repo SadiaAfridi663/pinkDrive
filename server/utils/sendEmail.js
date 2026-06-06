@@ -2,13 +2,17 @@ const nodemailer = require('nodemailer');
 const { getTransporter } = require('../config/mail');
 const logger = require('./logger');
 
-const FROM = process.env.FROM_EMAIL || 'noreply@pinkdrive.com';
+const FROM = process.env.SMTP_USER || process.env.FROM_EMAIL || 'noreply@pinkdrive.com';
 
 const sendEmail = async ({ to, subject, html }) => {
+  const plainText = html.replace(/<[^>]*>/g, '').trim();
+  logger.info(`[EMAIL] To: ${to} | Subject: ${subject}`);
+  logger.info(`[EMAIL] Body: ${plainText}`);
+
   const transporter = getTransporter();
 
   if (!transporter) {
-    logger.info(`[DEV] Email to ${to}: ${subject}\n${html.replace(/<[^>]*>/g, '')}`);
+    logger.info('[EMAIL] No transporter — email logged to console only.');
     return;
   }
 
@@ -25,7 +29,12 @@ const sendEmail = async ({ to, subject, html }) => {
     if (info.messageId) {
       const previewUrl = nodemailer.getTestMessageUrl(info);
       if (previewUrl) {
-        logger.info(`Ethereal preview URL: ${previewUrl}`);
+        console.log('');
+        console.log('╔══════════════════════════════════════════════════════╗');
+        console.log('║        📧  PREVIEW YOUR EMAIL (Ethereal)          ║');
+        console.log('╚══════════════════════════════════════════════════════╝');
+        console.log(`  ${previewUrl}`);
+        console.log('');
       }
     }
   } catch (error) {

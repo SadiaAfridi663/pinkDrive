@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 
 function SelfieCapture({ onCapture }) {
   const videoRef = useRef(null);
@@ -7,16 +7,32 @@ function SelfieCapture({ onCapture }) {
   const [active, setActive] = useState(false);
   const [captured, setCaptured] = useState(null);
 
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => stopCamera();
+  }, [stopCamera]);
+
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
       streamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
       setActive(true);
     } catch {
       alert('Camera access denied. Please allow camera access.');
     }
   };
+
+  useEffect(() => {
+    if (active && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [active]);
 
   const capture = () => {
     const video = videoRef.current;
@@ -29,15 +45,8 @@ function SelfieCapture({ onCapture }) {
     const dataUrl = canvas.toDataURL('image/jpeg');
     setCaptured(dataUrl);
     stopCamera();
-    if (onCapture) onCapture(dataUrl);
-  };
-
-  const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
     setActive(false);
+    if (onCapture) onCapture(dataUrl);
   };
 
   const retake = () => {
@@ -47,15 +56,24 @@ function SelfieCapture({ onCapture }) {
 
   return (
     <div className="selfie-capture">
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        className="selfie-video"
+        style={{ display: active && !captured ? 'block' : 'none' }}
+      />
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
+
       {!active && !captured && (
         <button type="button" className="verify-goto-login" onClick={startCamera} style={{ marginBottom: '0.5rem' }}>
           Open Camera for Selfie
         </button>
       )}
 
-      {active && (
+      {active && !captured && (
         <div className="selfie-preview">
-          <video ref={videoRef} autoPlay playsInline className="selfie-video" />
           <button type="button" className="verify-goto-login" onClick={capture} style={{ marginTop: '0.5rem' }}>
             Capture Selfie
           </button>
@@ -70,8 +88,6 @@ function SelfieCapture({ onCapture }) {
           </button>
         </div>
       )}
-
-      <canvas ref={canvasRef} style={{ display: 'none' }} />
     </div>
   );
 }

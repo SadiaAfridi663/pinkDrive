@@ -46,12 +46,10 @@ function Register() {
             <p className="verify-subtitle">
               Check your email for a <strong>4-digit verification code</strong> and enter it on the verify page.
             </p>
-            {import.meta.env.DEV && (
-              <p className="verify-dev-note">
-                DEV MODE: Open the <strong>server terminal</strong> — the code is logged there (no real email).
-              </p>
-            )}
-            <button className="btn btn-primary" onClick={() => navigate('/verify-email')}>
+            <p className="verify-dev-note">
+              Not seeing it? The code also appears in the <strong>server terminal</strong>.
+            </p>
+            <button className="btn btn-primary" onClick={() => navigate(`/verify-email?email=${encodeURIComponent(form.email)}`)}>
               Go to Verify Page
             </button>
           </div>

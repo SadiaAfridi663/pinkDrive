@@ -5,9 +5,12 @@ import { authAPI } from '../services/api';
 function VerifyEmail() {
   const [searchParams] = useSearchParams();
   const urlToken = searchParams.get('token');
+  const email = searchParams.get('email') || '';
   const [tokenInput, setTokenInput] = useState(urlToken || '');
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
+  const [resending, setResending] = useState(false);
+  const [resendMsg, setResendMsg] = useState('');
   const verifiedRef = useRef(false);
 
   useEffect(() => {
@@ -37,7 +40,24 @@ function VerifyEmail() {
       setMessage(res.data.message || 'Email verified successfully!');
     } catch (err) {
       setStatus('error');
-      setMessage(err.response?.data?.message || 'Verification failed. The token may be expired.');
+      setMessage(err.response?.data?.message || 'Verification failed. The code may be expired.');
+    }
+  };
+
+  const handleResend = async () => {
+    if (!email) {
+      setResendMsg('Enter your email first, then click Resend.');
+      return;
+    }
+    setResending(true);
+    setResendMsg('');
+    try {
+      const res = await authAPI.resendVerification(email);
+      setResendMsg(res.data.message || 'Code resent!');
+    } catch (err) {
+      setResendMsg(err.response?.data?.message || 'Failed to resend code.');
+    } finally {
+      setResending(false);
     }
   };
 
@@ -47,11 +67,11 @@ function VerifyEmail() {
         <h1>PinkDrive</h1>
         <h2>Verify Email</h2>
 
-        {import.meta.env.DEV && status === 'idle' && (
-          <p className="verify-dev-note" style={{ marginBottom: '1rem' }}>
-            DEV MODE: The code appears in the <strong>server terminal</strong> (no real email configured).
-          </p>
-        )}
+        <p className="verify-dev-note" style={{ marginBottom: '1rem' }}>
+          A 4-digit verification code has been sent to your email.
+          <br />
+          <strong>Tip:</strong> The code is also printed in the <strong>server terminal</strong> if you don't see it in your inbox.
+        </p>
 
         {status === 'verifying' && (
           <p className="verify-status pending">Verifying your email...</p>
@@ -60,7 +80,7 @@ function VerifyEmail() {
         {status === 'success' && (
           <>
             <p className="verify-status success">{message}</p>
-            <Link to="/login" className="verify-goto-login" style={{ textAlign: 'center', display: 'block', marginTop: '1.5rem' }}>
+            <Link to="/login" className="btn btn-primary" style={{ textAlign: 'center', display: 'block', marginTop: '1.5rem', textDecoration: 'none' }}>
               Go to Login
             </Link>
           </>
@@ -69,7 +89,7 @@ function VerifyEmail() {
         {status === 'error' && (
           <>
             <p className="verify-status error">{message}</p>
-            <button className="btn btn-primary" onClick={() => setStatus('idle')} style={{ marginTop: '1rem' }}>
+            <button className="btn btn-primary" onClick={() => { setStatus('idle'); setTokenInput(''); }} style={{ marginTop: '1rem' }}>
               Try Again
             </button>
           </>
@@ -78,11 +98,14 @@ function VerifyEmail() {
         {status === 'idle' && (
           <form onSubmit={handleVerify}>
             <p className="verify-subtitle" style={{ marginBottom: '1rem' }}>
-              Enter the verification code sent to your email.
+              Enter the <strong>4-digit verification code</strong> sent to your email.
             </p>
             <input
               className="code-input"
-              placeholder="Paste your verification code"
+              type="text"
+              inputMode="numeric"
+              maxLength={64}
+              placeholder="e.g. 8108"
               value={tokenInput}
               onChange={(e) => setTokenInput(e.target.value)}
               required
@@ -91,6 +114,19 @@ function VerifyEmail() {
               Verify Email
             </button>
           </form>
+        )}
+
+        {status !== 'success' && (
+          <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+            {resendMsg && (
+              <p style={{ fontSize: '0.85rem', color: resendMsg.includes('Failed') ? 'var(--error)' : 'var(--success)', margin: '0.5rem 0' }}>
+                {resendMsg}
+              </p>
+            )}
+            <button className="link-button" onClick={handleResend} disabled={resending}>
+              {resending ? 'Resending...' : 'Resend verification code'}
+            </button>
+          </div>
         )}
 
         <p className="auth-link" style={{ marginTop: '1rem' }}>

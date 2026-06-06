@@ -63,6 +63,18 @@ const User = sequelize.define('User', {
     type: DataTypes.DATE,
     allowNull: true,
   },
+  currentLat: {
+    type: DataTypes.FLOAT,
+    allowNull: true,
+  },
+  currentLng: {
+    type: DataTypes.FLOAT,
+    allowNull: true,
+  },
+  lastActiveAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
 }, {
   timestamps: true,
   tableName: 'users',

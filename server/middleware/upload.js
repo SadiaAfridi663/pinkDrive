@@ -5,7 +5,6 @@ const AppError = require('../utils/AppError');
 
 const UPLOAD_DIR = path.join(__dirname, '..', 'uploads', 'driver-docs');
 
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
 const storage = multer.diskStorage({
@@ -20,10 +19,10 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (_req, file, cb) => {
-  if (ALLOWED_TYPES.includes(file.mimetype)) {
+  if (file.mimetype && file.mimetype.startsWith('image/')) {
     cb(null, true);
   } else {
-    cb(new AppError('Only JPEG, PNG, and WebP images are allowed.', 400), false);
+    cb(new AppError('Only image files are allowed (JPEG, PNG, WebP).', 400), false);
   }
 };
 

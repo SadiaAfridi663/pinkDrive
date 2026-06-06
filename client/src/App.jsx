@@ -1,6 +1,7 @@
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import { useContext } from 'react';
 import { AuthContext } from './context/AuthContext';
+import { SocketProvider } from './context/SocketContext';
 import Nav from './components/Nav';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
@@ -14,6 +15,7 @@ import AdminVerification from './pages/AdminVerification';
 import PassengerDashboard from './pages/PassengerDashboard';
 import RequestRide from './pages/RequestRide';
 import ActiveRide from './pages/ActiveRide';
+import RideDetail from './pages/RideDetail';
 
 function Home() {
   const { user } = useContext(AuthContext);
@@ -35,7 +37,7 @@ function Layout({ children, roles }) {
 
 function App() {
   return (
-    <>
+    <SocketProvider>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
@@ -48,9 +50,10 @@ function App() {
         <Route path="/passenger" element={<Layout roles={['passenger']}><PassengerDashboard /></Layout>} />
         <Route path="/ride/request" element={<Layout roles={['passenger']}><RequestRide /></Layout>} />
         <Route path="/ride/active" element={<Layout roles={['passenger', 'driver']}><ActiveRide /></Layout>} />
+        <Route path="/ride/:id" element={<Layout roles={['passenger', 'driver']}><RideDetail /></Layout>} />
         <Route path="/" element={<Layout><Home /></Layout>} />
       </Routes>
-    </>
+    </SocketProvider>
   );
 }
 

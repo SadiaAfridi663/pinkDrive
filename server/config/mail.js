@@ -4,21 +4,26 @@ const logger = require('../utils/logger');
 let transporter = null;
 
 const createTransporter = async () => {
-  if (
-    process.env.SMTP_HOST &&
-    process.env.SMTP_USER &&
-    process.env.SMTP_PASS
-  ) {
-    transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT, 10) || 587,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
+  const host = process.env.SMTP_HOST;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS ? process.env.SMTP_PASS.replace(/\s+/g, '') : '';
+  const port = parseInt(process.env.SMTP_PORT, 10) || 587;
+
+  if (host && user && pass) {
+    const smtpTransporter = nodemailer.createTransport({
+      host,
+      port,
+      auth: { user, pass },
     });
-    logger.info('SMTP transporter configured');
-    return;
+
+    try {
+      await smtpTransporter.verify();
+      transporter = smtpTransporter;
+      logger.info('SMTP transporter configured and verified');
+      return;
+    } catch (err) {
+      logger.warn(`SMTP verification failed: ${err.message}.`);
+    }
   }
 
   try {
@@ -34,7 +39,7 @@ const createTransporter = async () => {
     });
     logger.info(`Ethereal email enabled — preview at https://ethereal.email/login (user=${testAccount.user})`);
   } catch {
-    logger.warn('No SMTP configured and Ethereal unavailable — emails logged to console only.');
+    logger.warn('No email transporter available — codes logged to console only.');
     transporter = null;
   }
 };
