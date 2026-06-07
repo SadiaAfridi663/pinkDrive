@@ -6,7 +6,7 @@ function ProtectedRoute({ children, roles }) {
   const { user, loading, isAuthenticated } = useContext(AuthContext);
 
   if (loading) {
-    return <div className="loading">Loading...</div>;
+    return <div className="flex items-center justify-center min-h-screen text-text-light text-sm">Loading...</div>;
   }
 
   if (!isAuthenticated) {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext, useCallback, useRef } from 'react';
+import { useState, useEffect, useContext, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { rideAPI } from '../services/api';
 import { AuthContext } from '../context/AuthContext';
@@ -89,20 +89,38 @@ function ActiveRide() {
     }
   };
 
-  if (loading) return <div className="loading">Loading...</div>;
+  const badgeClass = (status) => {
+    const base = 'inline-block text-xs font-semibold uppercase tracking-[0.05em] px-2 py-1 rounded';
+    const colors = {
+      approved: 'bg-[#e8f5e9] text-success',
+      rejected: 'bg-[#ffebee] text-error',
+      pending: 'bg-[#fff8e1] text-warning',
+      accepted: 'bg-[#e3f2fd] text-[#1565c0]',
+      arrived: 'bg-[#e3f2fd] text-[#1565c0]',
+      in_progress: 'bg-[#f3e5f5] text-[#7b1fa2]',
+      completed: 'bg-[#e8f5e9] text-success',
+      cancelled: 'bg-[#f5f5f5] text-text-light',
+    };
+    return `${base} ${colors[status] || colors.pending}`;
+  };
+
+  const pickup = useMemo(() => ride ? { lat: ride.pickupLat, lng: ride.pickupLng } : null, [ride?.pickupLat, ride?.pickupLng]);
+  const dropoff = useMemo(() => ride ? { lat: ride.dropoffLat, lng: ride.dropoffLng } : null, [ride?.dropoffLat, ride?.dropoffLng]);
+
+  if (loading) return <div className="flex items-center justify-center min-h-screen text-text-light text-sm">Loading...</div>;
 
   if (!ride) {
     return (
-      <div className="page">
-        <div className="page-header">
-          <h1 className="page-title">Active Ride</h1>
+      <div className="max-w-page mx-auto px-6 py-8 pb-16">
+        <div className="mb-8">
+          <h1 className="font-display text-[2.2rem] font-bold text-plum tracking-[-0.02em] leading-[1.15] m-0">Active Ride</h1>
         </div>
-        <div className="empty-section">
-          <div className="empty-icon">🚗</div>
-          <h3>No active ride</h3>
-          <p>You don't have an active ride right now.</p>
+        <div className="text-center p-12 mt-8">
+          <div className="text-4xl mb-2">&#128663;</div>
+          <h3 className="font-display text-[1.2rem] font-semibold text-plum m-0 mb-1">No active ride</h3>
+          <p className="text-sm text-text-muted m-0">You don't have an active ride right now.</p>
           {user?.role === 'passenger' && (
-            <button className="btn btn-primary" style={{ marginTop: '1rem' }} onClick={() => navigate('/ride/request')}>
+            <button className="inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none mt-4" onClick={() => navigate('/ride/request')}>
               Request a Ride
             </button>
           )}
@@ -120,47 +138,44 @@ function ActiveRide() {
     cancelled: 'Ride cancelled.',
   };
 
-  const pickup = { lat: ride.pickupLat, lng: ride.pickupLng };
-  const dropoff = { lat: ride.dropoffLat, lng: ride.dropoffLng };
-
   return (
-    <div className="page">
-      <div className="page-header">
-        <h1 className="page-title">Your Ride</h1>
+    <div className="max-w-page mx-auto px-6 py-8 pb-16">
+      <div className="mb-8">
+        <h1 className="font-display text-[2.2rem] font-bold text-plum tracking-[-0.02em] leading-[1.15] m-0">Your Ride</h1>
       </div>
 
-      {error && <p className="auth-error">{error}</p>}
+      {error && <p className="bg-[#fff5f5] text-error border border-[#ffcdd2] px-3.5 py-2.5 rounded-sm text-sm mb-2">{error}</p>}
 
-      <div className="ride-card">
-        <div className="ride-card-top">
-          <span className={`badge badge--${ride.status}`}>{ride.status}</span>
+      <div className="bg-white border border-border rounded p-5">
+        <div className="mb-2">
+          <span className={badgeClass(ride.status)}>{ride.status}</span>
         </div>
 
-        <p className="ride-card-status">{statusDisplay[ride.status]}</p>
+        <p className="font-display text-lg font-semibold text-plum m-0 mb-4">{statusDisplay[ride.status]}</p>
 
         {driver && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem', padding: '0.75rem', background: 'var(--off-white)', borderRadius: 'var(--radius-sm)' }}>
+          <div className="flex items-center gap-4 mb-4 p-3 bg-off-white rounded-sm">
             {driver.profilePhoto ? (
               <img
                 src={`${API_URL}/${driver.profilePhoto.replace(/\\/g, '/')}`}
                 alt={driver.name}
-                style={{ width: 52, height: 52, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--border)' }}
+                className="w-[52px] h-[52px] rounded-full object-cover border-2 border-border"
                 onError={(e) => { e.target.style.display = 'none'; }}
               />
             ) : (
-              <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--pink-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', color: 'var(--pink)' }}>
+              <div className="w-[52px] h-[52px] rounded-full bg-pink-subtle flex items-center justify-center text-[1.2rem] text-pink">
                 {driver.name?.[0] || 'D'}
               </div>
             )}
             <div>
-              <p style={{ margin: 0, fontWeight: 600, color: 'var(--plum)', fontSize: '1rem' }}>{driver.name}</p>
-              {driver.phone && <p style={{ margin: '0.15rem 0 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>{driver.phone}</p>}
+              <p className="m-0 font-semibold text-plum text-base">{driver.name}</p>
+              {driver.phone && <p className="m-0 mt-0.5 text-text-muted text-sm">{driver.phone}</p>}
             </div>
           </div>
         )}
 
         {['accepted', 'arrived', 'in_progress'].includes(ride.status) && (
-          <div style={{ marginBottom: '1rem', borderRadius: 'var(--radius-sm)', overflow: 'hidden', border: '1.5px solid var(--border)' }}>
+          <div className="mb-4 rounded-sm overflow-hidden border-2 border-border">
             <RideRouteMap
               pickup={pickup}
               dropoff={dropoff}
@@ -171,46 +186,46 @@ function ActiveRide() {
           </div>
         )}
 
-        <div className="ride-card-details">
-          <div className="ride-detail">
-            <span className="ride-detail-label">Pickup</span>
-            <span className="ride-detail-value">{ride.pickupAddress || `${ride.pickupLat?.toFixed(4)}, ${ride.pickupLng?.toFixed(4)}`}</span>
+        <div className="flex flex-col gap-2 mb-4">
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-text-muted">Pickup</span>
+            <span className="font-medium text-plum font-mono">{ride.pickupAddress || `${ride.pickupLat?.toFixed(4)}, ${ride.pickupLng?.toFixed(4)}`}</span>
           </div>
-          <div className="ride-detail">
-            <span className="ride-detail-label">Drop-off</span>
-            <span className="ride-detail-value">{ride.dropoffAddress || `${ride.dropoffLat?.toFixed(4)}, ${ride.dropoffLng?.toFixed(4)}`}</span>
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-text-muted">Drop-off</span>
+            <span className="font-medium text-plum font-mono">{ride.dropoffAddress || `${ride.dropoffLat?.toFixed(4)}, ${ride.dropoffLng?.toFixed(4)}`}</span>
           </div>
           {ride.distance && (
-            <div className="ride-detail">
-              <span className="ride-detail-label">Distance</span>
-              <span className="ride-detail-value">{ride.distance} km</span>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-text-muted">Distance</span>
+              <span className="font-medium text-plum font-mono">{ride.distance} km</span>
             </div>
           )}
           {ride.fare > 0 && (
-            <div className="ride-detail">
-              <span className="ride-detail-label">Fare</span>
-              <span className="ride-detail-value" style={{ fontWeight: 700 }}>{ride.fare} PKR</span>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-text-muted">Fare</span>
+              <span className="font-medium text-plum font-mono font-bold">{ride.fare} PKR</span>
             </div>
           )}
           {ride.paymentMethod && (
-            <div className="ride-detail">
-              <span className="ride-detail-label">Payment</span>
-              <span className="ride-detail-value" style={{ textTransform: 'capitalize' }}>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-text-muted">Payment</span>
+              <span className="font-medium text-plum font-mono capitalize">
                 {ride.paymentMethod}
                 {ride.paymentMethod === 'cash' && ride.status === 'completed' ? ' (due)' : ''}
               </span>
             </div>
           )}
           {ride.status !== 'pending' && driver && (
-            <div className="ride-detail">
-              <span className="ride-detail-label">Driver</span>
-              <span className="ride-detail-value">{driver.name}</span>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-text-muted">Driver</span>
+              <span className="font-medium text-plum font-mono">{driver.name}</span>
             </div>
           )}
         </div>
 
         {ride.status === 'pending' && (
-          <button className="btn btn-danger" style={{ width: '100%' }} onClick={handleCancel}>
+          <button className="bg-transparent border-2 border-[#ffcdd2] text-error hover:bg-[#ffebee] inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm rounded-sm px-5 py-2.5 cursor-pointer transition w-full" onClick={handleCancel}>
             Cancel Ride
           </button>
         )}

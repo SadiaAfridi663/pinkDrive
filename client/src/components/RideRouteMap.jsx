@@ -83,11 +83,9 @@ function RideRouteMap({ pickup, dropoff, driverLocation, passengerLocation, near
         lineCap: 'round',
         lineJoin: 'round',
       }).addTo(map);
-      const bounds = L.latLngBounds([coords[0], coords[coords.length - 1]]);
-      if (p1 && p2) bounds.extend([p1.lat, p1.lng]).extend([p2.lat, p2.lng]);
-      map.fitBounds(bounds, { padding: [50, 50] });
-    } catch {
-      // OSRM unavailable — skip route
+      fitAll();
+    } catch (err) {
+      console.warn('[RideRouteMap] OSRM route failed:', err);
     }
   };
 
@@ -99,7 +97,12 @@ function RideRouteMap({ pickup, dropoff, driverLocation, passengerLocation, near
     if (dropoff) points.push([dropoff.lat, dropoff.lng]);
     if (driverLocation) points.push([driverLocation.lat, driverLocation.lng]);
     if (passengerLocation) points.push([passengerLocation.lat, passengerLocation.lng]);
-    if (points.length < 2) return;
+    if (points.length < 2) {
+      if (points.length === 1) {
+        map.setView(points[0], 14);
+      }
+      return;
+    }
     const bounds = L.latLngBounds(points);
     map.fitBounds(bounds, { padding: [50, 50] });
   };
@@ -119,7 +122,13 @@ function RideRouteMap({ pickup, dropoff, driverLocation, passengerLocation, near
 
     mapRef.current = map;
 
+    const observer = new ResizeObserver(() => {
+      map.invalidateSize();
+    });
+    observer.observe(containerRef.current);
+
     return () => {
+      observer.disconnect();
       map.remove();
       mapRef.current = null;
       pickupMarkerRef.current = null;
@@ -175,7 +184,7 @@ function RideRouteMap({ pickup, dropoff, driverLocation, passengerLocation, near
         driverMarkerRef.current = L.marker([driverLocation.lat, driverLocation.lng], { icon: BLUE_ICON })
           .addTo(map).bindPopup('Driver');
       }
-      if (pickup && dropoff) fitAll();
+      fitAll();
     } else if (driverMarkerRef.current) {
       map.removeLayer(driverMarkerRef.current);
       driverMarkerRef.current = null;
@@ -193,7 +202,7 @@ function RideRouteMap({ pickup, dropoff, driverLocation, passengerLocation, near
         passengerMarkerRef.current = L.marker([passengerLocation.lat, passengerLocation.lng], { icon: ORANGE_ICON })
           .addTo(map).bindPopup('You');
       }
-      if (pickup && dropoff && driverLocation) fitAll();
+      fitAll();
     } else if (passengerMarkerRef.current) {
       map.removeLayer(passengerMarkerRef.current);
       passengerMarkerRef.current = null;
@@ -218,7 +227,7 @@ function RideRouteMap({ pickup, dropoff, driverLocation, passengerLocation, near
   return (
     <div
       ref={containerRef}
-      className={`map-container ${className || ''}`}
+      className={`w-full h-[280px] rounded-sm border-2 border-border overflow-hidden ${className || ''}`}
       style={height ? { height } : undefined}
     />
   );

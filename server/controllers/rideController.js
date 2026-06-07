@@ -6,7 +6,7 @@ const AppError = require('../utils/AppError');
 const catchAsync = require('../utils/catchAsync');
 const logger = require('../utils/logger');
 const { reverseGeocodeBoth, haversineDistance, fileToUrl } = require('../utils/geo');
-const { getOnlineDrivers } = require('../sockets');
+const { getOnlineDrivers, getIO } = require('../sockets');
 
 const RIDE_STATUS_FLOW = ['pending', 'accepted', 'arrived', 'in_progress', 'completed'];
 const FARE_PER_KM = 50;
@@ -120,7 +120,7 @@ exports.getActiveRide = catchAsync(async (req, res, next) => {
       attributes: ['id', 'name', 'phone'],
     });
     const profileDoc = await DriverDocument.findOne({
-      where: { userId: ride.driverId, documentType: 'profile_photo', status: 'approved' },
+      where: { userId: ride.driverId, documentType: 'profile_photo' },
     });
     if (driver) {
       driver = driver.toJSON();
@@ -194,14 +194,17 @@ exports.acceptRide = catchAsync(async (req, res, next) => {
   ride.driverId = req.user.id;
   ride.status = 'accepted';
   ride.startedAt = new Date();
-  if (driver.currentLat && driver.currentLng) {
-    ride.driverLat = driver.currentLat;
-    ride.driverLng = driver.currentLng;
-  }
+  ride.driverLat = driver.currentLat || null;
+  ride.driverLng = driver.currentLng || null;
   await ride.save();
 
+  const io = getIO();
+  if (io) {
+    io.to(`ride:${ride.id}`).emit('ride:status', { rideId: ride.id, status: 'accepted' });
+  }
+
   const profileDoc = await DriverDocument.findOne({
-    where: { userId: req.user.id, documentType: 'profile_photo', status: 'approved' },
+    where: { userId: req.user.id, documentType: 'profile_photo' },
   });
 
   const driverJson = driver.toJSON();
@@ -244,6 +247,11 @@ exports.updateRideStatus = catchAsync(async (req, res, next) => {
   ride.status = status;
   if (status === 'completed') ride.completedAt = new Date();
   await ride.save();
+
+  const io = getIO();
+  if (io) {
+    io.to(`ride:${ride.id}`).emit('ride:status', { rideId: ride.id, status });
+  }
 
   logger.info(`Ride ${ride.id} status updated to ${status} by driver ${req.user.email}`);
 
@@ -322,7 +330,7 @@ exports.getRideById = catchAsync(async (req, res, next) => {
   if (ride.driverId) {
     driver = await User.findByPk(ride.driverId, { attributes: ['id', 'name', 'phone'] });
     const profileDoc = await DriverDocument.findOne({
-      where: { userId: ride.driverId, documentType: 'profile_photo', status: 'approved' },
+      where: { userId: ride.driverId, documentType: 'profile_photo' },
     });
     if (driver) {
       driver = driver.toJSON();

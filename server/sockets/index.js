@@ -7,7 +7,10 @@ const { haversineDistance } = require('../utils/geo');
 
 const onlineDrivers = {};
 
+let _io = null;
+
 function setupSocketHandlers(io) {
+  _io = io;
   io.use(async (socket, next) => {
     try {
       const token = socket.handshake.auth.token || socket.handshake.query.token;
@@ -98,4 +101,8 @@ function getOnlineDrivers() {
   return onlineDrivers;
 }
 
-module.exports = { setupSocketHandlers, getOnlineDrivers };
+function getIO() {
+  return _io;
+}
+
+module.exports = { setupSocketHandlers, getOnlineDrivers, getIO };

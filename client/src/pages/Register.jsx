@@ -33,23 +33,23 @@ function Register() {
   };
 
   return (
-    <div className="auth-page">
-      <div className="auth-card">
-        <h1>PinkDrive</h1>
-        <h2>Create Account</h2>
+    <div className="flex items-center justify-center min-h-screen p-6 bg-gradient-to-br from-pink-subtle via-off-white to-pink-subtle">
+      <div className="w-full max-w-[400px] bg-white border border-border rounded px-8 py-10">
+        <h1 className="font-display text-[1.8rem] font-bold text-pink m-0 mb-1 tracking-[-0.02em]">PinkDrive</h1>
+        <h2 className="font-body text-base font-normal text-text-muted m-0 mb-6">Create Account</h2>
 
-        {(localError || error) && <p className="auth-error">{localError || error}</p>}
+        {(localError || error) && <p className="bg-[#fff5f5] text-error border border-[#ffcdd2] px-3.5 py-2.5 rounded-sm text-sm mb-2">{localError || error}</p>}
 
         {registered && (
-          <div className="verify-banner">
-            <p className="verify-title">Account created!</p>
-            <p className="verify-subtitle">
+          <div className="text-center py-2">
+            <p className="font-display text-[1.3rem] font-semibold text-success mb-2">Account created!</p>
+            <p className="text-sm text-text-muted mb-4">
               Check your email for a <strong>4-digit verification code</strong> and enter it on the verify page.
             </p>
-            <p className="verify-dev-note">
+            <p className="bg-[#fff8e1] text-[#856404] border border-[#ffeeba] rounded-sm px-3 py-2.5 text-xs mb-4">
               Not seeing it? The code also appears in the <strong>server terminal</strong>.
             </p>
-            <button className="btn btn-primary" onClick={() => navigate(`/verify-email?email=${encodeURIComponent(form.email)}`)}>
+            <button className="inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none" onClick={() => navigate(`/verify-email?email=${encodeURIComponent(form.email)}`)}>
               Go to Verify Page
             </button>
           </div>
@@ -57,13 +57,14 @@ function Register() {
 
         {!registered && (
           <>
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-3">
               <input
                 name="name"
                 placeholder="Full Name"
                 value={form.name}
                 onChange={handleChange}
                 required
+                className="px-3 py-3 border-2 border-border rounded-sm font-body text-[0.95rem] outline-none transition bg-off-white text-text focus:border-pink focus:bg-white"
               />
               <input
                 name="email"
@@ -72,6 +73,7 @@ function Register() {
                 value={form.email}
                 onChange={handleChange}
                 required
+                className="px-3 py-3 border-2 border-border rounded-sm font-body text-[0.95rem] outline-none transition bg-off-white text-text focus:border-pink focus:bg-white"
               />
               <input
                 name="password"
@@ -80,51 +82,63 @@ function Register() {
                 value={form.password}
                 onChange={handleChange}
                 required
+                className="px-3 py-3 border-2 border-border rounded-sm font-body text-[0.95rem] outline-none transition bg-off-white text-text focus:border-pink focus:bg-white"
               />
               <input
                 name="phone"
                 placeholder="Phone (optional)"
                 value={form.phone}
                 onChange={handleChange}
+                className="px-3 py-3 border-2 border-border rounded-sm font-body text-[0.95rem] outline-none transition bg-off-white text-text focus:border-pink focus:bg-white"
               />
-              <div className="role-selector">
-                <label className="role-label">I want to join as</label>
-                <div className="role-options">
-                  <label className={`role-option ${form.role === 'passenger' ? 'active' : ''}`}>
+              <div className="my-1">
+                <label className="block text-xs text-text-muted mb-2">I want to join as</label>
+                <div className="flex gap-2">
+                  <label className={`flex-1 flex flex-col items-center gap-1 p-3 border-2 rounded-sm cursor-pointer transition text-sm ${
+                    form.role === 'passenger'
+                      ? 'border-pink bg-pink-subtle text-pink font-semibold'
+                      : 'border-border text-text bg-off-white hover:border-pink'
+                  }`}>
                     <input
                       type="radio"
                       name="role"
                       value="passenger"
                       checked={form.role === 'passenger'}
                       onChange={handleChange}
+                      className="hidden"
                     />
-                    <span className="role-icon">&#128694;</span>
+                    <span className="text-[1.4rem]">&#128694;</span>
                     <span>Passenger</span>
                   </label>
-                  <label className={`role-option ${form.role === 'driver' ? 'active' : ''}`}>
+                  <label className={`flex-1 flex flex-col items-center gap-1 p-3 border-2 rounded-sm cursor-pointer transition text-sm ${
+                    form.role === 'driver'
+                      ? 'border-pink bg-pink-subtle text-pink font-semibold'
+                      : 'border-border text-text bg-off-white hover:border-pink'
+                  }`}>
                     <input
                       type="radio"
                       name="role"
                       value="driver"
                       checked={form.role === 'driver'}
                       onChange={handleChange}
+                      className="hidden"
                     />
-                    <span className="role-icon">&#128663;</span>
+                    <span className="text-[1.4rem]">&#128663;</span>
                     <span>Driver</span>
                   </label>
                 </div>
               </div>
               {form.role === 'driver' && (
-                <p className="role-note">
+                <p className="text-xs text-text-muted italic m-0">
                   You will need to upload verification documents (license, vehicle registration, photo) after registration.
                 </p>
               )}
-              <button type="submit" className="btn btn-primary btn-large" disabled={loading}>
+              <button type="submit" className="inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none px-8 py-3.5 text-base rounded w-full mt-1" disabled={loading}>
                 {loading ? 'Creating account...' : `Register as ${form.role === 'driver' ? 'Driver' : 'Passenger'}`}
               </button>
             </form>
-            <p className="auth-link">
-              Already have an account? <Link to="/login">Login</Link>
+            <p className="mt-5 text-sm text-text-muted text-center">
+              Already have an account? <Link to="/login" className="text-pink no-underline font-semibold hover:underline">Login</Link>
             </p>
           </>
         )}

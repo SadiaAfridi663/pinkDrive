@@ -55,35 +55,35 @@ function SelfieCapture({ onCapture }) {
   };
 
   return (
-    <div className="selfie-capture">
+    <div className="my-3">
       <video
         ref={videoRef}
         autoPlay
         playsInline
         muted
-        className="selfie-video"
+        className="w-full max-w-[280px] rounded-sm border border-border bg-black"
         style={{ display: active && !captured ? 'block' : 'none' }}
       />
-      <canvas ref={canvasRef} style={{ display: 'none' }} />
+      <canvas ref={canvasRef} className="hidden" />
 
       {!active && !captured && (
-        <button type="button" className="verify-goto-login" onClick={startCamera} style={{ marginBottom: '0.5rem' }}>
+        <button type="button" className="inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none mb-2" onClick={startCamera}>
           Open Camera for Selfie
         </button>
       )}
 
       {active && !captured && (
-        <div className="selfie-preview">
-          <button type="button" className="verify-goto-login" onClick={capture} style={{ marginTop: '0.5rem' }}>
+        <div className="flex flex-col items-center">
+          <button type="button" className="inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none mt-2" onClick={capture}>
             Capture Selfie
           </button>
         </div>
       )}
 
       {captured && (
-        <div className="selfie-preview">
-          <img src={captured} alt="Selfie" className="selfie-image" />
-          <button type="button" className="link-button" onClick={retake} style={{ marginTop: '0.5rem' }}>
+        <div className="flex flex-col items-center">
+          <img src={captured} alt="Selfie" className="w-full max-w-[280px] rounded-sm border border-border" />
+          <button type="button" className="bg-none border-none text-pink cursor-pointer text-sm font-body font-medium p-0 underline hover:text-pink-dark mt-2" onClick={retake}>
             Retake
           </button>
         </div>

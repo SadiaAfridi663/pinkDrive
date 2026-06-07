@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { rideAPI } from '../services/api';
 import { useSocket } from '../context/SocketContext';
@@ -145,6 +145,18 @@ function DriverRidesInner() {
       const res = await rideAPI.acceptRide(rideId);
       setMessage(res.data.message);
       fetchData();
+      if (navigator.geolocation && socket?.connected) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            setDriverLocation(loc);
+            socket.emit('location:update', { rideId, lat: loc.lat, lng: loc.lng });
+            rideAPI.updateDriverLocation(rideId, loc.lat, loc.lng).catch(() => {});
+          },
+          () => {},
+          { enableHighAccuracy: true, timeout: 10000 },
+        );
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to accept.');
     }
@@ -174,51 +186,69 @@ function DriverRidesInner() {
     return R * c;
   };
 
-  if (loading) return <div className="loading">Loading...</div>;
+  const badgeClass = (status) => {
+    const base = 'inline-block text-xs font-semibold uppercase tracking-[0.05em] px-2 py-1 rounded';
+    const colors = {
+      approved: 'bg-[#e8f5e9] text-success',
+      rejected: 'bg-[#ffebee] text-error',
+      pending: 'bg-[#fff8e1] text-warning',
+      accepted: 'bg-[#e3f2fd] text-[#1565c0]',
+      arrived: 'bg-[#e3f2fd] text-[#1565c0]',
+      in_progress: 'bg-[#f3e5f5] text-[#7b1fa2]',
+      completed: 'bg-[#e8f5e9] text-success',
+      cancelled: 'bg-[#f5f5f5] text-text-light',
+    };
+    return `${base} ${colors[status] || colors.pending}`;
+  };
+
+  const activePickup = useMemo(() => activeRide ? { lat: activeRide.pickupLat, lng: activeRide.pickupLng } : null, [activeRide?.pickupLat, activeRide?.pickupLng]);
+  const activeDropoff = useMemo(() => activeRide ? { lat: activeRide.dropoffLat, lng: activeRide.dropoffLng } : null, [activeRide?.dropoffLat, activeRide?.dropoffLng]);
+
+  if (loading) return <div className="flex items-center justify-center min-h-screen text-text-light text-sm">Loading...</div>;
 
   return (
-    <div className="page">
-      <div className="page-header">
-        <h1 className="page-title">Rides</h1>
-        <p className="page-subtitle">Accept and manage ride requests</p>
+    <div className="max-w-page mx-auto px-6 py-8 pb-16">
+      <div className="mb-8">
+        <h1 className="font-display text-[2.2rem] font-bold text-plum tracking-[-0.02em] leading-[1.15] m-0">Rides</h1>
+        <p className="text-[0.95rem] text-text-muted mt-1 m-0">Accept and manage ride requests</p>
       </div>
 
-      {error && <p className="auth-error">{error}</p>}
-      {message && <p className="auth-success">{message}</p>}
+      {error && <p className="bg-[#fff5f5] text-error border border-[#ffcdd2] px-3.5 py-2.5 rounded-sm text-sm mb-2">{error}</p>}
+      {message && <p className="bg-[#f1faf1] text-success border border-[#c8e6c9] px-3.5 py-2.5 rounded-sm text-sm mb-2">{message}</p>}
 
       {activeRide && (
-        <div className="section">
-          <h3 className="section-title">Current Ride</h3>
-          <div className="ride-card">
-            <div className="ride-card-top">
-              <span className={`badge badge--${activeRide.status}`}>{activeRide.status}</span>
+        <div className="mt-8">
+          <h3 className="font-display text-base font-semibold text-plum mb-3 tracking-[-0.01em] m-0">Current Ride</h3>
+          <div className="bg-white border border-border rounded p-5">
+            <div className="mb-2">
+              <span className={badgeClass(activeRide.status)}>{activeRide.status}</span>
             </div>
 
             {activePassenger && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem', padding: '0.6rem', background: 'var(--off-white)', borderRadius: 'var(--radius-sm)' }}>
+              <div className="flex items-center gap-3 mb-3 p-2.5 bg-off-white rounded-sm">
                 {activePassenger.selfiePath ? (
                   <img
                     src={`${API_URL}/${activePassenger.selfiePath.replace(/\\/g, '/')}`}
                     alt={activePassenger.name}
-                    style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--border)' }}
+                    className="w-11 h-11 rounded-full object-cover border-2 border-border"
                     onError={(e) => { e.target.style.display = 'none'; }}
                   />
                 ) : (
-                  <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--pink-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', color: 'var(--pink)' }}>
+                  <div className="w-11 h-11 rounded-full bg-pink-subtle flex items-center justify-center text-base text-pink">
                     {activePassenger.name?.[0] || 'P'}
                   </div>
                 )}
                 <div>
-                  <p style={{ margin: 0, fontWeight: 600, color: 'var(--plum)', fontSize: '0.95rem' }}>{activePassenger.name}</p>
+                  <p className="m-0 font-semibold text-plum text-[0.95rem]">{activePassenger.name}</p>
                 </div>
               </div>
             )}
 
             {['accepted', 'arrived', 'in_progress'].includes(activeRide.status) && (
-              <div style={{ marginBottom: '1rem', borderRadius: 'var(--radius-sm)', overflow: 'hidden', border: '1.5px solid var(--border)' }}>
+              <div className="mb-4 rounded-sm overflow-hidden border-2 border-border">
                 <RideRouteMap
-                  pickup={{ lat: activeRide.pickupLat, lng: activeRide.pickupLng }}
-                  dropoff={{ lat: activeRide.dropoffLat, lng: activeRide.dropoffLng }}
+                  pickup={activePickup}
+                  dropoff={activeDropoff}
                   driverLocation={driverLocation}
                   passengerLocation={passengerLocation}
                   height="220px"
@@ -226,50 +256,48 @@ function DriverRidesInner() {
               </div>
             )}
 
-            <div className="ride-card-details">
-              <div className="ride-detail">
-                <span className="ride-detail-label">Passenger</span>
-                <span className="ride-detail-value">{activePassenger?.name || 'Unknown'}</span>
+            <div className="flex flex-col gap-2 mb-4">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-text-muted">Passenger</span>
+                <span className="font-medium text-plum font-mono">{activePassenger?.name || 'Unknown'}</span>
               </div>
-              <div className="ride-detail">
-                <span className="ride-detail-label">Pickup</span>
-                <span className="ride-detail-value">{activeRide.pickupAddress || `${activeRide.pickupLat?.toFixed(4)}, ${activeRide.pickupLng?.toFixed(4)}`}</span>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-text-muted">Pickup</span>
+                <span className="font-medium text-plum font-mono">{activeRide.pickupAddress || `${activeRide.pickupLat?.toFixed(4)}, ${activeRide.pickupLng?.toFixed(4)}`}</span>
               </div>
-              <div className="ride-detail">
-                <span className="ride-detail-label">Drop-off</span>
-                <span className="ride-detail-value">{activeRide.dropoffAddress || `${activeRide.dropoffLat?.toFixed(4)}, ${activeRide.dropoffLng?.toFixed(4)}`}</span>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-text-muted">Drop-off</span>
+                <span className="font-medium text-plum font-mono">{activeRide.dropoffAddress || `${activeRide.dropoffLat?.toFixed(4)}, ${activeRide.dropoffLng?.toFixed(4)}`}</span>
               </div>
               {activeRide.distance && (
-                <div className="ride-detail">
-                  <span className="ride-detail-label">Distance</span>
-                  <span className="ride-detail-value">{activeRide.distance} km</span>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-text-muted">Distance</span>
+                  <span className="font-medium text-plum font-mono">{activeRide.distance} km</span>
                 </div>
               )}
               {activeRide.fare > 0 && (
-                <div className="ride-detail">
-                  <span className="ride-detail-label">Fare</span>
-                  <span className="ride-detail-value" style={{ fontWeight: 700 }}>{activeRide.fare} PKR</span>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-text-muted">Fare</span>
+                  <span className="font-medium text-plum font-mono font-bold">{activeRide.fare} PKR</span>
                 </div>
               )}
             </div>
-            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+            <div className="flex gap-2 mt-3">
               {activeRide.status === 'accepted' && (() => {
                 const distToPickup = driverLocation
                   ? Math.round(haversineDistance(driverLocation.lat, driverLocation.lng, activeRide.pickupLat, activeRide.pickupLng) * 1000)
                   : null;
                 const isNear = distToPickup !== null && distToPickup <= 50;
                 return (
-                  <div style={{ width: '100%' }}>
+                  <div className="w-full">
                     {distToPickup !== null && (
-                      <p style={{ margin: '0 0 0.4rem', fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-                        {isNear
-                          ? 'Arrived at pickup'
-                          : `${distToPickup}m from pickup`}
+                      <p className="m-0 mb-1.5 text-xs text-text-muted text-center">
+                        {isNear ? 'Arrived at pickup' : `${distToPickup}m from pickup`}
                       </p>
                     )}
                     <button
-                      className="btn btn-primary"
-                      style={{ flex: 1, width: '100%', opacity: isNear ? 1 : 0.5 }}
+                      className="inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none w-full"
+                      style={{ opacity: isNear ? 1 : 0.5 }}
                       disabled={!isNear}
                       onClick={() => handleStatus(activeRide.id, 'arrived')}
                     >
@@ -279,12 +307,12 @@ function DriverRidesInner() {
                 );
               })()}
               {activeRide.status === 'arrived' && (
-                <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => handleStatus(activeRide.id, 'in_progress')}>
+                <button className="inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none flex-1" onClick={() => handleStatus(activeRide.id, 'in_progress')}>
                   Start Ride
                 </button>
               )}
               {activeRide.status === 'in_progress' && (
-                <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => handleStatus(activeRide.id, 'completed')}>
+                <button className="inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none flex-1" onClick={() => handleStatus(activeRide.id, 'completed')}>
                   Complete Ride
                 </button>
               )}
@@ -293,42 +321,42 @@ function DriverRidesInner() {
         </div>
       )}
 
-      <div className="section">
-        <h3 className="section-title">Pending Requests ({pendingRides.length})</h3>
+      <div className="mt-8">
+        <h3 className="font-display text-base font-semibold text-plum mb-3 tracking-[-0.01em] m-0">Pending Requests ({pendingRides.length})</h3>
 
         {pendingRides.length === 0 ? (
-          <div className="empty-section" style={{ marginTop: 0 }}>
-            <div className="empty-icon">🚗</div>
-            <h3>No ride requests</h3>
-            <p>Waiting for passengers to request rides.</p>
+          <div className="text-center p-12 mt-0">
+            <div className="text-4xl mb-2">&#128663;</div>
+            <h3 className="font-display text-[1.2rem] font-semibold text-plum m-0 mb-1">No ride requests</h3>
+            <p className="text-sm text-text-muted m-0">Waiting for passengers to request rides.</p>
           </div>
         ) : (
-          <div className="ride-list">
+          <div className="flex flex-col gap-3">
             {pendingRides.map((ride) => (
-              <div key={ride.id} className="ride-card">
-                <div className="ride-card-details">
-                  <div className="ride-detail">
-                    <span className="ride-detail-label">Passenger</span>
-                    <span className="ride-detail-value">{ride.passenger?.name || 'Unknown'}</span>
+              <div key={ride.id} className="bg-white border border-border rounded p-5">
+                <div className="flex flex-col gap-2 mb-4">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-text-muted">Passenger</span>
+                    <span className="font-medium text-plum font-mono">{ride.passenger?.name || 'Unknown'}</span>
                   </div>
-                  <div className="ride-detail">
-                    <span className="ride-detail-label">Pickup</span>
-                    <span className="ride-detail-value">{ride.pickupAddress || `${ride.pickupLat?.toFixed(4)}, ${ride.pickupLng?.toFixed(4)}`}</span>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-text-muted">Pickup</span>
+                    <span className="font-medium text-plum font-mono">{ride.pickupAddress || `${ride.pickupLat?.toFixed(4)}, ${ride.pickupLng?.toFixed(4)}`}</span>
                   </div>
-                  <div className="ride-detail">
-                    <span className="ride-detail-label">Drop-off</span>
-                    <span className="ride-detail-value">{ride.dropoffAddress || `${ride.dropoffLat?.toFixed(4)}, ${ride.dropoffLng?.toFixed(4)}`}</span>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-text-muted">Drop-off</span>
+                    <span className="font-medium text-plum font-mono">{ride.dropoffAddress || `${ride.dropoffLat?.toFixed(4)}, ${ride.dropoffLng?.toFixed(4)}`}</span>
                   </div>
-                  <div className="ride-detail">
-                    <span className="ride-detail-label">Distance</span>
-                    <span className="ride-detail-value">{ride.distance ? `${ride.distance} km` : 'N/A'}</span>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-text-muted">Distance</span>
+                    <span className="font-medium text-plum font-mono">{ride.distance ? `${ride.distance} km` : 'N/A'}</span>
                   </div>
-                  <div className="ride-detail">
-                    <span className="ride-detail-label">Fare</span>
-                    <span className="ride-detail-value" style={{ fontWeight: 700 }}>{ride.fare ? `${ride.fare} PKR` : 'N/A'}</span>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-text-muted">Fare</span>
+                    <span className="font-medium text-plum font-mono font-bold">{ride.fare ? `${ride.fare} PKR` : 'N/A'}</span>
                   </div>
                 </div>
-                <button className="btn btn-primary" style={{ width: '100%', marginTop: '0.5rem' }} onClick={() => handleAccept(ride.id)}>
+                <button className="inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none w-full mt-2" onClick={() => handleAccept(ride.id)}>
                   Accept Ride
                 </button>
               </div>
@@ -338,20 +366,20 @@ function DriverRidesInner() {
       </div>
 
       {history.length > 0 && (
-        <div className="section">
-          <h3 className="section-title">Recent Rides</h3>
-          <div className="history-list">
+        <div className="mt-8">
+          <h3 className="font-display text-base font-semibold text-plum mb-3 tracking-[-0.01em] m-0">Recent Rides</h3>
+          <div className="flex flex-col gap-1.5">
             {history.map((r) => (
-              <div key={r.id} className="history-row" style={{ cursor: 'pointer' }} onClick={() => navigate(`/ride/${r.id}`)}>
-                <div className="history-row-left">
-                  <span className="history-route">
+              <div key={r.id} className="flex items-center justify-between px-4 py-3 bg-white border border-border rounded-sm cursor-pointer" onClick={() => navigate(`/ride/${r.id}`)}>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-sm font-medium text-plum">
                     {r.passenger ? `${r.passenger.name} · ` : ''}{r.pickupAddress || `${r.pickupLat?.toFixed(2)}, ${r.pickupLng?.toFixed(2)}`} &rarr; {r.dropoffAddress || `${r.dropoffLat?.toFixed(2)}, ${r.dropoffLng?.toFixed(2)}`}
                   </span>
-                  <span className="history-date">
+                  <span className="text-xs text-text-light">
                     {r.distance ? `${r.distance} km · ` : ''}{r.fare ? `${r.fare} PKR · ` : ''}{new Date(r.createdAt).toLocaleDateString()}
                   </span>
                 </div>
-                <span className={`badge badge--${r.status}`}>{r.status}</span>
+                <span className={badgeClass(r.status)}>{r.status}</span>
               </div>
             ))}
           </div>

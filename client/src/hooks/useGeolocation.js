@@ -12,6 +12,7 @@ function useGeolocation() {
   const [position, setPosition] = useState(null);
   const [error, setError] = useState(null);
   const watchIdRef = useRef(null);
+  const requestedRef = useRef(false);
 
   const request = useCallback(() => {
     if (!navigator.geolocation) {
@@ -63,12 +64,28 @@ function useGeolocation() {
   }, []);
 
   useEffect(() => {
-    if (!navigator.permissions) return;
+    if (!navigator.permissions) {
+      if (navigator.geolocation && !requestedRef.current) {
+        requestedRef.current = true;
+        request();
+      }
+      return;
+    }
     navigator.permissions.query({ name: 'geolocation' }).then((result) => {
       setPermissionState(result.state);
-      result.addEventListener('change', () => setPermissionState(result.state));
+      if (result.state === 'granted' && !requestedRef.current) {
+        requestedRef.current = true;
+        request();
+      }
+      result.addEventListener('change', () => {
+        setPermissionState(result.state);
+        if (result.state === 'granted' && !requestedRef.current) {
+          requestedRef.current = true;
+          request();
+        }
+      });
     }).catch(() => {});
-  }, []);
+  }, [request]);
 
   useEffect(() => {
     return () => stopWatching();

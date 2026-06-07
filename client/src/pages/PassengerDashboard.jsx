@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { rideAPI } from '../services/api';
 import { AuthContext } from '../context/AuthContext';
-import { useContext } from 'react';
+import { useSocket } from '../context/SocketContext';
 
 const API_URL = import.meta.env.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace('/api', '')
@@ -14,32 +14,65 @@ function PassengerDashboard() {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const { user } = useContext(AuthContext);
+  const { socket } = useSocket();
   const navigate = useNavigate();
+
+  const fetch = useCallback(async (mounted = true) => {
+    try {
+      const [activeRes, historyRes] = await Promise.all([
+        rideAPI.getActiveRide(),
+        rideAPI.getHistory().catch(() => ({ data: { data: { rides: [] } } })),
+      ]);
+      if (mounted) {
+        const active = activeRes.data.data;
+        setActiveRide(active.ride);
+        setActiveDriver(active.driver);
+        setHistory(historyRes.data.data.rides.slice(0, 5));
+      }
+    } catch {
+      // no active ride
+    } finally {
+      if (mounted) setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     let mounted = true;
-    const fetch = async () => {
-      try {
-        const [activeRes, historyRes] = await Promise.all([
-          rideAPI.getActiveRide(),
-          rideAPI.getHistory().catch(() => ({ data: { data: { rides: [] } } })),
-        ]);
-        if (mounted) {
-          const active = activeRes.data.data;
-          setActiveRide(active.ride);
-          setActiveDriver(active.driver);
-          setHistory(historyRes.data.data.rides.slice(0, 5));
-        }
-      } catch {
-        // no active ride
-      } finally {
-        if (mounted) setLoading(false);
-      }
+    fetch(mounted);
+    const interval = setInterval(() => fetch(mounted), 5000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
     };
-    fetch();
-  }, []);
+  }, [fetch]);
 
-  if (loading) return <div className="loading">Loading...</div>;
+  useEffect(() => {
+    if (!socket || !activeRide) return;
+    socket.emit('join:ride', activeRide.id);
+    const handler = () => fetch(true);
+    socket.on('ride:status', handler);
+    return () => {
+      socket.emit('leave:ride', activeRide.id);
+      socket.off('ride:status', handler);
+    };
+  }, [socket, activeRide?.id]);
+
+  const badgeClass = (status) => {
+    const base = 'inline-block text-xs font-semibold uppercase tracking-[0.05em] px-2 py-1 rounded';
+    const colors = {
+      approved: 'bg-[#e8f5e9] text-success',
+      rejected: 'bg-[#ffebee] text-error',
+      pending: 'bg-[#fff8e1] text-warning',
+      accepted: 'bg-[#e3f2fd] text-[#1565c0]',
+      arrived: 'bg-[#e3f2fd] text-[#1565c0]',
+      in_progress: 'bg-[#f3e5f5] text-[#7b1fa2]',
+      completed: 'bg-[#e8f5e9] text-success',
+      cancelled: 'bg-[#f5f5f5] text-text-light',
+    };
+    return `${base} ${colors[status] || colors.pending}`;
+  };
+
+  if (loading) return <div className="flex items-center justify-center min-h-screen text-text-light text-sm">Loading...</div>;
 
   const statusDisplay = {
     pending: 'Looking for a driver...',
@@ -51,94 +84,94 @@ function PassengerDashboard() {
   };
 
   return (
-    <div className="page">
-      <div className="page-header">
-        <h1 className="page-title">Passenger</h1>
-        <p className="page-subtitle">{user?.name || 'Welcome'}</p>
+    <div className="max-w-page mx-auto px-6 py-8 pb-16">
+      <div className="mb-8">
+        <h1 className="font-display text-[2.2rem] font-bold text-plum tracking-[-0.02em] leading-[1.15] m-0">Passenger</h1>
+        <p className="text-[0.95rem] text-text-muted mt-1 m-0">{user?.name || 'Welcome'}</p>
       </div>
 
       {activeRide ? (
-        <div className="section">
-          <h3 className="section-title">Current Ride</h3>
-          <div className="ride-card">
-            <div className="ride-card-top">
-              <span className={`badge badge--${activeRide.status}`}>{activeRide.status}</span>
+        <div className="mt-8">
+          <h3 className="font-display text-base font-semibold text-plum mb-3 tracking-[-0.01em] m-0">Current Ride</h3>
+          <div className="bg-white border border-border rounded p-5">
+            <div className="mb-2">
+              <span className={badgeClass(activeRide.status)}>{activeRide.status}</span>
             </div>
-            <p className="ride-card-status">{statusDisplay[activeRide.status]}</p>
+            <p className="font-display text-lg font-semibold text-plum m-0 mb-4">{statusDisplay[activeRide.status]}</p>
 
             {activeDriver && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem', padding: '0.75rem', background: 'var(--off-white)', borderRadius: 'var(--radius-sm)' }}>
+              <div className="flex items-center gap-4 mb-4 p-3 bg-off-white rounded-sm">
                 {activeDriver.profilePhoto ? (
                   <img
                     src={`${API_URL}/${activeDriver.profilePhoto.replace(/\\/g, '/')}`}
                     alt={activeDriver.name}
-                    style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--border)' }}
+                    className="w-12 h-12 rounded-full object-cover border-2 border-border"
                     onError={(e) => { e.target.style.display = 'none'; }}
                   />
                 ) : (
-                  <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--pink-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', color: 'var(--pink)' }}>
+                  <div className="w-12 h-12 rounded-full bg-pink-subtle flex items-center justify-center text-lg text-pink">
                     {activeDriver.name?.[0] || 'D'}
                   </div>
                 )}
                 <div>
-                  <p style={{ margin: 0, fontWeight: 600, color: 'var(--plum)', fontSize: '0.95rem' }}>{activeDriver.name}</p>
+                  <p className="m-0 font-semibold text-plum text-[0.95rem]">{activeDriver.name}</p>
                 </div>
               </div>
             )}
 
-            <div className="ride-card-details">
-              <div className="ride-detail">
-                <span className="ride-detail-label">Pickup</span>
-                <span className="ride-detail-value">{activeRide.pickupAddress || `${activeRide.pickupLat?.toFixed(4)}, ${activeRide.pickupLng?.toFixed(4)}`}</span>
+            <div className="flex flex-col gap-2 mb-4">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-text-muted">Pickup</span>
+                <span className="font-medium text-plum font-mono">{activeRide.pickupAddress || `${activeRide.pickupLat?.toFixed(4)}, ${activeRide.pickupLng?.toFixed(4)}`}</span>
               </div>
-              <div className="ride-detail">
-                <span className="ride-detail-label">Drop-off</span>
-                <span className="ride-detail-value">{activeRide.dropoffAddress || `${activeRide.dropoffLat?.toFixed(4)}, ${activeRide.dropoffLng?.toFixed(4)}`}</span>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-text-muted">Drop-off</span>
+                <span className="font-medium text-plum font-mono">{activeRide.dropoffAddress || `${activeRide.dropoffLat?.toFixed(4)}, ${activeRide.dropoffLng?.toFixed(4)}`}</span>
               </div>
               {activeRide.distance && (
-                <div className="ride-detail">
-                  <span className="ride-detail-label">Distance</span>
-                  <span className="ride-detail-value">{activeRide.distance} km</span>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-text-muted">Distance</span>
+                  <span className="font-medium text-plum font-mono">{activeRide.distance} km</span>
                 </div>
               )}
               {activeRide.fare > 0 && (
-                <div className="ride-detail">
-                  <span className="ride-detail-label">Fare</span>
-                  <span className="ride-detail-value" style={{ fontWeight: 700 }}>{activeRide.fare} PKR</span>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-text-muted">Fare</span>
+                  <span className="font-medium text-plum font-mono font-bold">{activeRide.fare} PKR</span>
                 </div>
               )}
             </div>
-            <button className="btn btn-primary" onClick={() => navigate('/ride/active')}>
+            <button className="inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none" onClick={() => navigate('/ride/active')}>
               View Details
             </button>
           </div>
         </div>
       ) : (
-        <div className="hero-card">
-          <div className="hero-card-emblem">🚗</div>
-          <h2 className="hero-card-title">Where to?</h2>
-          <p className="hero-card-text">Book a ride to get started. Select your pickup and drop-off locations, verify with a selfie, and you are on your way.</p>
-          <button className="btn btn-primary btn-large" onClick={() => navigate('/ride/request')}>
+        <div className="text-center p-12 bg-white border border-border rounded">
+          <div className="text-5xl mb-4">&#128663;</div>
+          <h2 className="font-display text-[1.8rem] font-bold text-plum m-0 mb-2 tracking-[-0.02em]">Where to?</h2>
+          <p className="text-[0.95rem] text-text-muted mx-auto mb-6 max-w-[320px] leading-[1.6] m-0 mb-6">Book a ride to get started. Select your pickup and drop-off locations, verify with a selfie, and you are on your way.</p>
+          <button className="inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none px-8 py-3.5 text-base rounded" onClick={() => navigate('/ride/request')}>
             Request a Ride
           </button>
         </div>
       )}
 
       {history.length > 0 && (
-        <div className="section">
-          <h3 className="section-title">Recent Rides</h3>
-          <div className="history-list">
+        <div className="mt-8">
+          <h3 className="font-display text-base font-semibold text-plum mb-3 tracking-[-0.01em] m-0">Recent Rides</h3>
+          <div className="flex flex-col gap-1.5">
             {history.map((r) => (
-              <div key={r.id} className="history-row" style={{ cursor: 'pointer' }} onClick={() => navigate(`/ride/${r.id}`)}>
-                <div className="history-row-left">
-                  <span className="history-route">
+              <div key={r.id} className="flex items-center justify-between px-4 py-3 bg-white border border-border rounded-sm cursor-pointer" onClick={() => navigate(`/ride/${r.id}`)}>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-sm font-medium text-plum">
                     {r.driver ? `${r.driver.name} · ` : ''}{r.pickupAddress || `${r.pickupLat?.toFixed(2)}, ${r.pickupLng?.toFixed(2)}`} &rarr; {r.dropoffAddress || `${r.dropoffLat?.toFixed(2)}, ${r.dropoffLng?.toFixed(2)}`}
                   </span>
-                  <span className="history-date">
+                  <span className="text-xs text-text-light">
                     {r.distance ? `${r.distance} km · ` : ''}{r.fare ? `${r.fare} PKR · ` : ''}{new Date(r.createdAt).toLocaleDateString()}
                   </span>
                 </div>
-                <span className={`badge badge--${r.status}`}>{r.status}</span>
+                <span className={badgeClass(r.status)}>{r.status}</span>
               </div>
             ))}
           </div>

@@ -30,14 +30,14 @@ function Nav() {
         ];
 
   return (
-    <nav className="nav">
-      <Link to="/" className="nav-brand">PinkDrive</Link>
-      <div className="nav-links">
+    <nav className="flex items-center justify-between px-6 h-[60px] bg-white border-b border-border sticky top-0 z-[100]">
+      <Link to="/" className="font-display text-[1.3rem] font-bold text-pink no-underline tracking-[-0.02em]">PinkDrive</Link>
+      <div className="flex items-center gap-2">
         {links.map((l) => (
-          <Link key={l.to} to={l.to} className="nav-link">{l.label}</Link>
+          <Link key={l.to} to={l.to} className="text-sm font-medium text-text-muted no-underline px-3 py-1.5 rounded-sm hover:text-pink hover:bg-pink-subtle transition">{l.label}</Link>
         ))}
-        <span className="nav-user">{user.name}</span>
-        <button className="nav-logout" onClick={handleLogout}>Logout</button>
+        <span className="text-xs text-text-muted px-2">{user.name}</span>
+        <button className="bg-none border border-border rounded-sm px-3 py-1 font-body text-xs text-text-muted cursor-pointer hover:border-error hover:text-error hover:bg-[#fff5f5] transition" onClick={handleLogout}>Logout</button>
       </div>
     </nav>
   );
