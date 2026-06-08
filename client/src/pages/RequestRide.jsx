@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { rideAPI } from '../services/api';
+import { rideAPI, serviceAreaAPI } from '../services/api';
 import MapLocationPicker from '../components/MapLocationPicker';
 import RideRouteMap from '../components/RideRouteMap';
 import SelfieCapture from '../components/SelfieCapture';
@@ -16,10 +16,23 @@ function RequestRideInner() {
   const [selfieDataUrl, setSelfieDataUrl] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [nearbyDrivers, setNearbyDrivers] = useState([]);
+  const [serviceAreas, setServiceAreas] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { position } = useGeolocation();
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetch = async () => {
+      try {
+        const res = await serviceAreaAPI.getActive();
+        if (!cancelled) setServiceAreas(res.data.data.areas);
+      } catch { /* ignore */ }
+    };
+    fetch();
+    return () => { cancelled = true; };
+  }, []);
 
   const distance =
     pickup && dropoff
@@ -110,11 +123,17 @@ function RequestRideInner() {
               {nearbyDrivers.length} driver{nearbyDrivers.length > 1 ? 's' : ''} nearby
             </p>
           )}
+          {serviceAreas.length > 0 && (
+            <p className="text-xs text-text-muted mb-1">
+              Service area{serviceAreas.length > 1 ? 's' : ''} shown on map
+            </p>
+          )}
           <MapLocationPicker
             label="Click on the map to set your pickup location"
             onSelect={(pos) => setPickup(pos)}
             initialPosition={pickup || position}
             userLocation={position}
+            serviceAreas={serviceAreas}
           />
           {pickup && (
             <div className="mt-3">

@@ -7,6 +7,9 @@ const connectDatabases = async () => {
   require('../models/PendingRegistration');
   require('../models/DriverDocument');
   require('../models/Ride');
+  require('../models/ServiceArea');
+  require('../models/SOSAlert');
+  require('../models/EmergencyContact');
   await connectSQL();
 };
 

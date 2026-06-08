@@ -28,6 +28,10 @@ function setupSocketHandlers(io) {
   io.on('connection', async (socket) => {
     logger.info(`Socket connected: ${socket.user.email} (${socket.user.role})`);
 
+    if (socket.user.role === 'admin') {
+      socket.join('admin-room');
+    }
+
     if (socket.user.role === 'driver' && socket.user.isDriverVerified) {
       onlineDrivers[socket.user.id] = { socketId: socket.id, lat: null, lng: null, updatedAt: Date.now() };
       io.emit('drivers:online', Object.keys(onlineDrivers).length);
@@ -57,9 +61,9 @@ function setupSocketHandlers(io) {
           try {
             const ride = await Ride.findByPk(rideId, { attributes: ['id', 'status', 'pickupLat', 'pickupLng'] });
             if (ride && ride.status === 'accepted') {
-              const distanceToPickup = haversineDistance(lat, lng, ride.pickupLat, ride.pickupLng) * 1000;
-              if (distanceToPickup <= 50) {
-                ride.status = 'arrived';
+               const distanceToPickup = haversineDistance(lat, lng, ride.pickupLat, ride.pickupLng) * 1000;
+               if (distanceToPickup <= 200) {
+                 ride.status = 'arrived';
                 await ride.save();
                 logger.info(`Ride ${rideId} auto-arrived — driver within ${Math.round(distanceToPickup)}m of pickup`);
                 io.to(`ride:${rideId}`).emit('ride:status', { rideId, status: 'arrived' });

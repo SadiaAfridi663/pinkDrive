@@ -59,6 +59,12 @@ async function start() {
   app.use('/api/driver-verification', driverVerificationRoutes);
   app.use('/api/rides', rideRoutes);
 
+  const serviceAreaRoutes = require('./routes/serviceAreas');
+  app.use('/api/service-areas', serviceAreaRoutes);
+
+  const sosRoutes = require('./routes/sos');
+  app.use('/api/sos', sosRoutes);
+
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
   app.use(errorMiddleware);
 

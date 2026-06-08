@@ -65,4 +65,21 @@ export const rideAPI = {
   getNearbyDrivers: (lat, lng, radius) => api.get('/rides/nearby-drivers', { params: { lat, lng, radius } }),
 };
 
+export const serviceAreaAPI = {
+  getAll: () => api.get('/service-areas'),
+  getActive: () => api.get('/service-areas/active'),
+  create: (data) => api.post('/service-areas', data),
+  update: (id, data) => api.patch(`/service-areas/${id}`, data),
+  remove: (id) => api.delete(`/service-areas/${id}`),
+};
+
+export const sosAPI = {
+  trigger: (data) => api.post('/sos/trigger', data),
+  getAlerts: (status) => api.get('/sos/alerts', { params: { status } }),
+  resolveAlert: (id) => api.patch(`/sos/${id}/resolve`),
+  getContacts: () => api.get('/sos/contacts'),
+  addContact: (data) => api.post('/sos/contacts', data),
+  removeContact: (id) => api.delete(`/sos/contacts/${id}`),
+};
+
 export default api;

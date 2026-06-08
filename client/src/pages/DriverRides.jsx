@@ -287,9 +287,9 @@ function DriverRidesInner() {
                 const distToPickup = driverLocation
                   ? Math.round(haversineDistance(driverLocation.lat, driverLocation.lng, activeRide.pickupLat, activeRide.pickupLng) * 1000)
                   : null;
-                const isNear = distToPickup !== null && distToPickup <= 50;
-                return (
-                  <div className="w-full">
+                 const isNear = distToPickup !== null && distToPickup <= 200;
+                 return (
+                   <div className="w-full">
                     {distToPickup !== null && (
                       <p className="m-0 mb-1.5 text-xs text-text-muted text-center">
                         {isNear ? 'Arrived at pickup' : `${distToPickup}m from pickup`}

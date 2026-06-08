@@ -17,6 +17,7 @@ function Nav() {
     ? [
         { to: '/passenger', label: 'Dashboard' },
         { to: '/ride/request', label: 'New Ride' },
+        { to: '/emergency-contacts', label: 'Emergency' },
       ]
     : user.role === 'driver'
       ? [
@@ -27,6 +28,8 @@ function Nav() {
       : [
           { to: '/admin', label: 'Dashboard' },
           { to: '/admin/verifications', label: 'Verifications' },
+          { to: '/admin/sos', label: 'SOS' },
+          { to: '/admin/geo-fence', label: 'Geo-Fence' },
         ];
 
   return (

@@ -21,13 +21,15 @@ const GREEN_ICON = new L.Icon({
   shadowSize: [41, 41],
 });
 
-function MapLocationPicker({ onSelect, label, initialPosition, otherMarker, userLocation }) {
+function MapLocationPicker({ onSelect, label, initialPosition, otherMarker, userLocation, serviceAreas }) {
   const mapRef = useRef(null);
   const markerRef = useRef(null);
   const otherMarkerRef = useRef(null);
   const containerRef = useRef(null);
   const userDotRef = useRef(null);
   const pulseIntervalRef = useRef(null);
+  const polygonLayersRef = useRef([]);
+  const prevPosRef = useRef(null);
 
   useEffect(() => {
     if (mapRef.current) return;
@@ -55,7 +57,7 @@ function MapLocationPicker({ onSelect, label, initialPosition, otherMarker, user
       onSelect({ lat: latlng.lat, lng: latlng.lng });
     };
 
-    if (initialPosition) {
+    if (initialPosition && !otherMarker) {
       handlePosition(initialPosition);
     }
 
@@ -72,6 +74,9 @@ function MapLocationPicker({ onSelect, label, initialPosition, otherMarker, user
 
   useEffect(() => {
     if (!mapRef.current || !initialPosition) return;
+    const prev = prevPosRef.current;
+    if (prev && prev.lat === initialPosition.lat && prev.lng === initialPosition.lng) return;
+    prevPosRef.current = initialPosition;
     mapRef.current.setView([initialPosition.lat, initialPosition.lng], DEFAULT_ZOOM);
     mapRef.current.invalidateSize();
     if (markerRef.current) {
@@ -135,6 +140,27 @@ function MapLocationPicker({ onSelect, label, initialPosition, otherMarker, user
       }
     }
   }, [userLocation]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    for (const l of polygonLayersRef.current) map.removeLayer(l);
+    polygonLayersRef.current = [];
+    if (!serviceAreas) return;
+    for (const area of serviceAreas) {
+      if (!area.coordinates || area.coordinates.length < 3) continue;
+      const coords = area.coordinates.map(([lat, lng]) => [lat, lng]);
+      const poly = L.polygon(coords, {
+        color: area.color || '#e91e8c',
+        weight: 2,
+        opacity: 0.8,
+        fillColor: area.color || '#e91e8c',
+        fillOpacity: 0.12,
+      }).addTo(map);
+      poly.bindPopup(`<strong>${area.name}</strong>`);
+      polygonLayersRef.current.push(poly);
+    }
+  }, [serviceAreas]);
 
   return (
     <div className="mb-4">

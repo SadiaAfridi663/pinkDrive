@@ -56,4 +56,19 @@ function fileToUrl(filePath) {
   return normalized.substring(idx);
 }
 
-module.exports = { reverseGeocode, reverseGeocodeBoth, haversineDistance, fileToUrl };
+function isPointInPolygon(lat, lng, polygon) {
+  if (!polygon || polygon.length < 3) return false;
+  let inside = false;
+  const n = polygon.length;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const [latI, lngI] = polygon[i];
+    const [latJ, lngJ] = polygon[j];
+    if ((lngI > lng) !== (lngJ > lng) &&
+        lat < ((latJ - latI) * (lng - lngI)) / (lngJ - lngI) + latI) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+module.exports = { reverseGeocode, reverseGeocodeBoth, haversineDistance, fileToUrl, isPointInPolygon };

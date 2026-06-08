@@ -1,6 +1,6 @@
 import { useState, useEffect, useContext, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { rideAPI } from '../services/api';
+import { rideAPI, sosAPI } from '../services/api';
 import { AuthContext } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import RideRouteMap from '../components/RideRouteMap';
@@ -18,7 +18,7 @@ function ActiveRide() {
   const [error, setError] = useState('');
   const { user } = useContext(AuthContext);
   const { socket } = useSocket();
-  const { position, isGranted, startWatching } = useGeolocation();
+  const { position, isGranted, startWatching, request } = useGeolocation();
   const navigate = useNavigate();
   const watchStartedRef = useRef(false);
 
@@ -32,7 +32,7 @@ function ActiveRide() {
       }
       setRide(data.ride);
       setDriver(data.driver);
-      if (data.ride.driverLat && data.ride.driverLng) {
+      if (data.ride.driverLat != null && data.ride.driverLng != null) {
         setDriverLocation({ lat: data.ride.driverLat, lng: data.ride.driverLng });
       }
     } catch (err) {
@@ -65,10 +65,12 @@ function ActiveRide() {
   }, [socket, ride?.id]);
 
   useEffect(() => {
-    if (!ride || user?.role !== 'passenger' || !isGranted) return;
+    if (!ride || user?.role !== 'passenger') return;
     if (!['accepted', 'arrived', 'in_progress'].includes(ride.status)) return;
     if (watchStartedRef.current) return;
     watchStartedRef.current = true;
+
+    request();
 
     startWatching((loc) => {
       if (socket?.connected) {
@@ -77,7 +79,28 @@ function ActiveRide() {
     });
 
     return () => { watchStartedRef.current = false; };
-  }, [ride?.id, ride?.status, user?.role, isGranted, socket?.connected]);
+  }, [ride?.id, ride?.status, user?.role, socket?.connected]);
+
+  const [sosSending, setSosSending] = useState(false);
+  const [sosSent, setSosSent] = useState(false);
+
+  const handleSOS = async () => {
+    if (!ride || sosSending || sosSent) return;
+    if (!window.confirm('Trigger SOS alert? Your emergency contacts and PinkDrive admins will be notified immediately.')) return;
+    setSosSending(true);
+    try {
+      await sosAPI.trigger({
+        rideId: ride.id,
+        lat: position?.lat || ride.passengerLat || ride.pickupLat,
+        lng: position?.lng || ride.passengerLng || ride.pickupLng,
+      });
+      setSosSent(true);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to send SOS.');
+    } finally {
+      setSosSending(false);
+    }
+  };
 
   const handleCancel = async () => {
     if (!ride) return;
@@ -223,6 +246,19 @@ function ActiveRide() {
             </div>
           )}
         </div>
+
+        {['accepted', 'arrived', 'in_progress'].includes(ride.status) && user?.role === 'passenger' && (
+          <div className="mt-4 pt-4 border-t border-border">
+            <button
+              className="w-full inline-flex items-center justify-center gap-2 font-body font-semibold text-sm border-2 border-error rounded-sm px-5 py-3 cursor-pointer transition bg-[#ffebee] text-error hover:bg-error hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={handleSOS}
+              disabled={sosSending || sosSent}
+            >
+              {sosSent ? 'SOS Sent' : sosSending ? 'Sending...' : 'SOS Emergency'}
+            </button>
+            {sosSent && <p className="text-xs text-success text-center mt-1">Help is on the way. Admin has been notified.</p>}
+          </div>
+        )}
 
         {ride.status === 'pending' && (
           <button className="bg-transparent border-2 border-[#ffcdd2] text-error hover:bg-[#ffebee] inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm rounded-sm px-5 py-2.5 cursor-pointer transition w-full" onClick={handleCancel}>

@@ -5,7 +5,8 @@ const DriverDocument = require('../models/DriverDocument');
 const AppError = require('../utils/AppError');
 const catchAsync = require('../utils/catchAsync');
 const logger = require('../utils/logger');
-const { reverseGeocodeBoth, haversineDistance, fileToUrl } = require('../utils/geo');
+const { reverseGeocodeBoth, haversineDistance, fileToUrl, isPointInPolygon } = require('../utils/geo');
+const ServiceArea = require('../models/ServiceArea');
 const { getOnlineDrivers, getIO } = require('../sockets');
 
 const RIDE_STATUS_FLOW = ['pending', 'accepted', 'arrived', 'in_progress', 'completed'];
@@ -31,6 +32,16 @@ exports.createRide = catchAsync(async (req, res, next) => {
   });
   if (active) {
     return next(new AppError('You already have an active ride.', 400));
+  }
+
+  const activeAreas = await ServiceArea.findAll({ where: { isActive: true } });
+  if (activeAreas.length > 0) {
+    const inServiceArea = activeAreas.some((a) =>
+      isPointInPolygon(pickupLat, pickupLng, a.coordinates),
+    );
+    if (!inServiceArea) {
+      return next(new AppError('Pickup location is outside our service area.', 400));
+    }
   }
 
   const [pickupAddress, dropoffAddress] = await reverseGeocodeBoth(pickupLat, pickupLng, dropoffLat, dropoffLng);
@@ -191,16 +202,24 @@ exports.acceptRide = catchAsync(async (req, res, next) => {
     return next(new AppError('You already have an active ride.', 400));
   }
 
+  const onlineDrivers = getOnlineDrivers();
+  const driverOnline = onlineDrivers[req.user.id];
+  const dLat = driverOnline?.lat ?? driver.currentLat;
+  const dLng = driverOnline?.lng ?? driver.currentLng;
+
   ride.driverId = req.user.id;
   ride.status = 'accepted';
   ride.startedAt = new Date();
-  ride.driverLat = driver.currentLat || null;
-  ride.driverLng = driver.currentLng || null;
+  ride.driverLat = dLat != null ? dLat : null;
+  ride.driverLng = dLng != null ? dLng : null;
   await ride.save();
 
   const io = getIO();
   if (io) {
     io.to(`ride:${ride.id}`).emit('ride:status', { rideId: ride.id, status: 'accepted' });
+    if (ride.driverLat != null && ride.driverLng != null) {
+      io.to(`ride:${ride.id}`).emit('driver:location', { lat: ride.driverLat, lng: ride.driverLng });
+    }
   }
 
   const profileDoc = await DriverDocument.findOne({

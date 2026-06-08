@@ -12,6 +12,9 @@ import DriverDashboard from './pages/DriverDashboard';
 import DriverRides from './pages/DriverRides';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminVerification from './pages/AdminVerification';
+import AdminGeoFence from './pages/AdminGeoFence';
+import AdminSOS from './pages/AdminSOS';
+import EmergencyContacts from './pages/EmergencyContacts';
 import PassengerDashboard from './pages/PassengerDashboard';
 import RequestRide from './pages/RequestRide';
 import ActiveRide from './pages/ActiveRide';
@@ -47,6 +50,9 @@ function App() {
         <Route path="/driver/rides" element={<Layout roles={['driver']}><DriverRides /></Layout>} />
         <Route path="/admin" element={<Layout roles={['admin']}><AdminDashboard /></Layout>} />
         <Route path="/admin/verifications" element={<Layout roles={['admin']}><AdminVerification /></Layout>} />
+        <Route path="/admin/geo-fence" element={<Layout roles={['admin']}><AdminGeoFence /></Layout>} />
+        <Route path="/admin/sos" element={<Layout roles={['admin']}><AdminSOS /></Layout>} />
+        <Route path="/emergency-contacts" element={<Layout roles={['passenger']}><EmergencyContacts /></Layout>} />
         <Route path="/passenger" element={<Layout roles={['passenger']}><PassengerDashboard /></Layout>} />
         <Route path="/ride/request" element={<Layout roles={['passenger']}><RequestRide /></Layout>} />
         <Route path="/ride/active" element={<Layout roles={['passenger', 'driver']}><ActiveRide /></Layout>} />
