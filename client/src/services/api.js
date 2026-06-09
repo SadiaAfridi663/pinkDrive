@@ -42,6 +42,11 @@ export const adminAPI = {
   getPendingVerifications: () => api.get('/driver-verification/pending'),
   reviewVerification: (userId, action, adminNote) =>
     api.patch(`/driver-verification/review/${userId}`, { action, adminNote }),
+  getStats: () => api.get('/admin/stats'),
+  getUsers: (params) => api.get('/admin/users', { params }),
+  suspendUser: (id) => api.patch(`/admin/users/${id}/suspend`),
+  getAllRides: (params) => api.get('/admin/rides', { params }),
+  getActivities: (params) => api.get('/admin/activities', { params }),
 };
 
 export const rideAPI = {

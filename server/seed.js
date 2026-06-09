@@ -6,6 +6,9 @@ const User = require('./models/User');
 const DriverDocument = require('./models/DriverDocument');
 const Ride = require('./models/Ride');
 const PendingRegistration = require('./models/PendingRegistration');
+const ServiceArea = require('./models/ServiceArea');
+const SOSAlert = require('./models/SOSAlert');
+const EmergencyContact = require('./models/EmergencyContact');
 
 const seed = async () => {
   try {

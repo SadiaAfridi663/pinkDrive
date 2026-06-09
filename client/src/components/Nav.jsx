@@ -28,8 +28,11 @@ function Nav() {
       : [
           { to: '/admin', label: 'Dashboard' },
           { to: '/admin/verifications', label: 'Verifications' },
+          { to: '/admin/users', label: 'Users' },
+          { to: '/admin/rides', label: 'Rides' },
           { to: '/admin/sos', label: 'SOS' },
           { to: '/admin/geo-fence', label: 'Geo-Fence' },
+          { to: '/admin/activity', label: 'Activity' },
         ];
 
   return (

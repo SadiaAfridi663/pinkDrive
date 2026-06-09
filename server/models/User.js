@@ -47,6 +47,10 @@ const User = sequelize.define('User', {
     type: DataTypes.BOOLEAN,
     defaultValue: false,
   },
+  isSuspended: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+  },
   isDriverVerified: {
     type: DataTypes.BOOLEAN,
     defaultValue: false,

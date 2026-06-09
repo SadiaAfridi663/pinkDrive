@@ -1,7 +1,8 @@
 const jwt = require('jsonwebtoken');
 const AppError = require('../utils/AppError');
+const User = require('../models/User');
 
-const authenticate = (req, res, next) => {
+const authenticate = async (req, res, next) => {
   let token;
 
   if (req.cookies && req.cookies.token) {
@@ -19,7 +20,10 @@ const authenticate = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
+    const user = await User.findByPk(decoded.id);
+    if (!user) return next(new AppError('User not found.', 401));
+    if (user.isSuspended) return next(new AppError('Your account has been suspended.', 403));
+    req.user = user;
     next();
   } catch {
     return next(new AppError('Invalid or expired token.', 401));

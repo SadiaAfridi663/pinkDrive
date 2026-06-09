@@ -65,6 +65,9 @@ async function start() {
   const sosRoutes = require('./routes/sos');
   app.use('/api/sos', sosRoutes);
 
+  const adminRoutes = require('./routes/admin');
+  app.use('/api/admin', adminRoutes);
+
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
   app.use(errorMiddleware);
 
