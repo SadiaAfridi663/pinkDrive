@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { rideAPI } from '../services/api';
+import { adminAPI } from '../services/api';
 import RideRouteMap from '../components/RideRouteMap';
+import Avatar from '../components/Avatar';
 
 const API_URL = import.meta.env.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace('/api', '')
   : 'http://localhost:5000';
 
-function RideDetail() {
+function AdminRideDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [ride, setRide] = useState(null);
@@ -19,7 +20,7 @@ function RideDetail() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await rideAPI.getRideById(id);
+        const res = await adminAPI.getRideById(id);
         setRide(res.data.data.ride);
         setDriver(res.data.data.driver);
         setPassenger(res.data.data.passenger);
@@ -34,8 +35,6 @@ function RideDetail() {
   const badgeClass = (status) => {
     const base = 'inline-block text-xs font-semibold uppercase tracking-[0.05em] px-2 py-1 rounded';
     const colors = {
-      approved: 'bg-[#e8f5e9] text-success',
-      rejected: 'bg-[#ffebee] text-error',
       pending: 'bg-[#fff8e1] text-warning',
       accepted: 'bg-[#e3f2fd] text-[#1565c0]',
       arrived: 'bg-[#e3f2fd] text-[#1565c0]',
@@ -55,13 +54,20 @@ function RideDetail() {
           <h1>Ride Details</h1>
         </div>
         <p className="msg msg-error">{error || 'Ride not found.'}</p>
-        <button className="btn btn-secondary" onClick={() => navigate(-1)}>Go Back</button>
+        <button className="btn btn-secondary" onClick={() => navigate('/admin/rides')}>Back to Rides</button>
       </div>
     );
   }
 
   const pickup = { lat: ride.pickupLat, lng: ride.pickupLng };
   const dropoff = { lat: ride.dropoffLat, lng: ride.dropoffLng };
+
+  const getFileUrl = (fp) => {
+    if (!fp) return null;
+    const n = fp.replace(/\\/g, '/');
+    if (n.startsWith('http://') || n.startsWith('https://')) return n;
+    return `${API_URL}/${n}`;
+  };
 
   return (
     <div className="page">
@@ -78,48 +84,28 @@ function RideDetail() {
         </div>
 
         <div className="mb-4 rounded-sm overflow-hidden border-2 border-border">
-            <RideRouteMap pickup={pickup} dropoff={dropoff} height="220px" />
-          </div>
+          <RideRouteMap pickup={pickup} dropoff={dropoff} height="220px" />
+        </div>
 
         {driver && (
           <div className="flex items-center gap-4 mb-3 p-3 bg-ivory rounded-sm">
-            {driver.profilePhoto ? (
-              <img
-                src={`${API_URL}/${driver.profilePhoto.replace(/\\/g, '/')}`}
-                alt={driver.name}
-                className="w-12 h-12 rounded-full object-cover border-2 border-border"
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
-            ) : (
-              <div className="w-12 h-12 rounded-full bg-coral-light flex items-center justify-center text-lg text-coral">
-                {driver.name?.[0] || 'D'}
-              </div>
-            )}
+            <Avatar name={driver.name} size="lg" src={getFileUrl(driver.profilePhoto)} />
             <div>
               <p className="m-0 font-semibold text-navy text-xs opacity-60">Driver</p>
               <p className="m-0 font-semibold text-navy text-base">{driver.name}</p>
-              {driver.phone && <p className="m-0 mt-0.5 text-stone text-sm">{driver.phone}</p>}
+              {driver.email && <p className="m-0 mt-0.5 text-stone text-sm">{driver.email}</p>}
+              {driver.phone && <p className="m-0 text-stone text-sm">{driver.phone}</p>}
             </div>
           </div>
         )}
 
         {passenger && (
           <div className="flex items-center gap-4 mb-4 p-3 bg-ivory rounded-sm">
-            {passenger.selfiePath ? (
-              <img
-                src={`${API_URL}/${passenger.selfiePath.replace(/\\/g, '/')}`}
-                alt={passenger.name}
-                className="w-12 h-12 rounded-full object-cover border-2 border-border"
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
-            ) : (
-              <div className="w-12 h-12 rounded-full bg-coral-light flex items-center justify-center text-lg text-coral">
-                {passenger.name?.[0] || 'P'}
-              </div>
-            )}
+            <Avatar name={passenger.name} size="lg" />
             <div>
               <p className="m-0 font-semibold text-navy text-xs opacity-60">Passenger</p>
               <p className="m-0 font-semibold text-navy text-base">{passenger.name}</p>
+              {passenger.email && <p className="m-0 mt-0.5 text-stone text-sm">{passenger.email}</p>}
             </div>
           </div>
         )}
@@ -142,20 +128,23 @@ function RideDetail() {
           {ride.fare > 0 && (
             <div className="flex justify-between items-center text-sm">
               <span className="text-stone">Fare</span>
-              <span className="font-medium text-navy font-mono font-bold text-navy">{ride.fare} PKR</span>
+              <span className="font-medium text-navy font-mono font-bold">{ride.fare} PKR</span>
             </div>
           )}
           <div className="flex justify-between items-center text-sm">
-            <span className="text-stone">Payment</span>
-            <span className="font-medium text-navy font-mono capitalize">
-              {ride.paymentMethod || 'N/A'}
-              {ride.paymentMethod === 'cash' && ride.status === 'completed' ? ' (due)' : ''}
-            </span>
+            <span className="text-stone">Payment Method</span>
+            <span className="font-medium text-navy font-mono capitalize">{ride.paymentMethod || 'N/A'}</span>
           </div>
           <div className="flex justify-between items-center text-sm">
             <span className="text-stone">Payment Status</span>
             <span className="font-medium text-navy font-mono capitalize">{ride.paymentStatus || 'N/A'}</span>
           </div>
+          {ride.startedAt && (
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-stone">Started</span>
+              <span className="font-medium text-navy font-mono">{new Date(ride.startedAt).toLocaleString()}</span>
+            </div>
+          )}
           {ride.completedAt && (
             <div className="flex justify-between items-center text-sm">
               <span className="text-stone">Completed</span>
@@ -164,12 +153,12 @@ function RideDetail() {
           )}
         </div>
 
-        <button className="btn btn-secondary w-full mt-3" onClick={() => navigate(-1)}>
-          Go Back
+        <button className="btn btn-secondary w-full mt-3" onClick={() => navigate('/admin/rides')}>
+          Back to Rides
         </button>
       </div>
     </div>
   );
 }
 
-export default RideDetail;
+export default AdminRideDetail;

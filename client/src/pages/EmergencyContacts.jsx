@@ -58,53 +58,53 @@ function EmergencyContacts() {
     }
   };
 
-  if (loading) return <div className="flex items-center justify-center min-h-screen text-text-light text-sm">Loading...</div>;
+  if (loading) return <div className="flex items-center justify-center min-h-screen text-stone-light text-sm">Loading...</div>;
 
   return (
-    <div className="max-w-page mx-auto px-6 py-8 pb-16">
+    <div className="page">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="font-display text-[2.2rem] font-bold text-plum tracking-[-0.02em] leading-[1.15] m-0">Emergency Contacts</h1>
-          <p className="text-[0.95rem] text-text-muted mt-1 m-0">People to notify in case of an emergency</p>
+          <h1 className="font-display text-[2.2rem] font-bold text-navy tracking-[-0.02em] leading-[1.15] m-0">Emergency Contacts</h1>
+          <p className="text-[0.95rem] text-stone mt-1 m-0">People to notify in case of an emergency</p>
         </div>
         {!adding && contacts.length < 5 && (
-          <button className="inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-4 py-2 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark" onClick={() => setAdding(true)}>
+          <button className="btn btn-primary" onClick={() => setAdding(true)}>
             + Add Contact
           </button>
         )}
       </div>
 
-      {error && <p className="bg-[#fff5f5] text-error border border-[#ffcdd2] px-3.5 py-2.5 rounded-sm text-sm mb-2">{error}</p>}
-      {message && <p className="bg-[#f1faf1] text-success border border-[#c8e6c9] px-3.5 py-2.5 rounded-sm text-sm mb-2">{message}</p>}
+      {error && <p className="msg msg-error">{error}</p>}
+      {message && <p className="msg msg-success">{message}</p>}
 
       {adding && (
-        <form onSubmit={handleAdd} className="bg-white border border-border rounded-sm p-4 mb-6">
-          <h3 className="font-display text-base font-semibold text-plum m-0 mb-3">New Emergency Contact</h3>
+        <form onSubmit={handleAdd} className="card p-4 mb-6">
+          <h3 className="font-display text-base font-semibold text-navy m-0 mb-3">New Emergency Contact</h3>
           <div className="flex flex-col gap-3 mb-3">
             <input
-              className="w-full px-3 py-2 text-sm border border-border rounded-sm bg-white text-text placeholder:text-text-light focus:outline-none focus:border-pink"
+              className="w-full px-3 py-2 text-sm border border-border rounded-sm bg-white text-charcoal placeholder:text-stone-light focus:outline-none focus:border-coral"
               placeholder="Full name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
             />
             <input
-              className="w-full px-3 py-2 text-sm border border-border rounded-sm bg-white text-text placeholder:text-text-light focus:outline-none focus:border-pink"
+              className="w-full px-3 py-2 text-sm border border-border rounded-sm bg-white text-charcoal placeholder:text-stone-light focus:outline-none focus:border-coral"
               placeholder="Phone number"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               required
             />
             <input
-              className="w-full px-3 py-2 text-sm border border-border rounded-sm bg-white text-text placeholder:text-text-light focus:outline-none focus:border-pink"
+              className="w-full px-3 py-2 text-sm border border-border rounded-sm bg-white text-charcoal placeholder:text-stone-light focus:outline-none focus:border-coral"
               placeholder="Relationship (e.g. Mother, Sister, Friend)"
               value={relationship}
               onChange={(e) => setRelationship(e.target.value)}
             />
           </div>
           <div className="flex gap-2">
-            <button type="button" className="bg-transparent border-2 border-border text-text-muted hover:border-pink hover:text-pink inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm rounded-sm px-4 py-2 cursor-pointer transition" onClick={() => { setAdding(false); setName(''); setPhone(''); setRelationship(''); }}>Cancel</button>
-            <button type="submit" className="inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-4 py-2 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark disabled:opacity-50 disabled:cursor-not-allowed" disabled={saving || !name.trim() || !phone.trim()}>
+            <button type="button" className="btn btn-secondary" onClick={() => { setAdding(false); setName(''); setPhone(''); setRelationship(''); }}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={saving || !name.trim() || !phone.trim()}>
               {saving ? 'Saving...' : 'Save Contact'}
             </button>
           </div>
@@ -112,24 +112,24 @@ function EmergencyContacts() {
       )}
 
       {contacts.length === 0 ? (
-        <div className="text-center p-12 bg-white border border-border rounded">
+        <div className="text-center p-12 card">
           <div className="text-4xl mb-2">&#x1F6E1;&#xFE0F;</div>
-          <h3 className="font-display text-[1.2rem] font-semibold text-plum m-0 mb-1">No emergency contacts</h3>
-          <p className="text-sm text-text-muted m-0">Add emergency contacts so they are notified in case you trigger an SOS alert.</p>
+          <h3 className="font-display text-[1.2rem] font-semibold text-navy m-0 mb-1">No emergency contacts</h3>
+          <p className="text-sm text-stone m-0">Add emergency contacts so they are notified in case you trigger an SOS alert.</p>
         </div>
       ) : (
         <div className="flex flex-col gap-2">
           {contacts.map((c) => (
-            <div key={c.id} className="flex items-center gap-3 px-4 py-3.5 bg-white border border-border rounded-sm">
-              <div className="w-10 h-10 rounded-full bg-pink-subtle flex items-center justify-center text-sm text-pink font-semibold">
+            <div key={c.id} className="flex items-center gap-3 card-list">
+              <div className="w-10 h-10 rounded-full bg-coral-light flex items-center justify-center text-sm text-coral font-semibold">
                 {c.name?.[0] || '?'}
               </div>
               <div className="flex-1 flex flex-col gap-0.5">
-                <span className="text-sm font-semibold text-plum">{c.name}</span>
-                <span className="text-xs text-text-muted">{c.phone}{c.relationship ? ` · ${c.relationship}` : ''}</span>
+                <span className="text-sm font-semibold text-navy">{c.name}</span>
+                <span className="text-xs text-stone">{c.phone}{c.relationship ? ` ┬╖ ${c.relationship}` : ''}</span>
               </div>
               <button
-                className="px-2.5 py-1 text-xs font-semibold border border-border rounded-sm text-text-muted bg-transparent hover:text-error hover:border-error cursor-pointer transition"
+                className="px-2.5 py-1 text-xs font-semibold border border-border rounded-sm text-stone bg-transparent hover:text-error hover:border-error cursor-pointer transition"
                 onClick={() => handleRemove(c.id, c.name)}
               >
                 Remove

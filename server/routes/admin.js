@@ -10,6 +10,7 @@ router.get('/stats', adminController.getStats);
 router.get('/users', adminController.getUsers);
 router.patch('/users/:id/suspend', adminController.suspendUser);
 router.get('/rides', adminController.getAllRides);
+router.get('/rides/:id', adminController.getRideById);
 router.get('/activities', adminController.getActivities);
 
 module.exports = router;

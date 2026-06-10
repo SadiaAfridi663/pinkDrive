@@ -6,6 +6,7 @@ const catchAsync = require('../utils/catchAsync');
 const logger = require('../utils/logger');
 const fs = require('fs');
 const path = require('path');
+const { fileToUrl } = require('../utils/geo');
 
 exports.uploadDocuments = catchAsync(async (req, res, next) => {
   const driver = await User.findByPk(req.user.id);
@@ -23,7 +24,7 @@ exports.uploadDocuments = catchAsync(async (req, res, next) => {
     const doc = await DriverDocument.create({
       userId: req.user.id,
       documentType: file.fieldname,
-      filePath: file.path,
+      filePath: fileToUrl(file.path),
       originalName: file.originalname,
       mimeType: file.mimetype,
       status: 'pending',
@@ -66,7 +67,11 @@ exports.getVerificationStatus = catchAsync(async (req, res, next) => {
     data: {
       status,
       isDriverVerified: driver.isDriverVerified,
-      documents,
+      documents: documents.map((d) => {
+      const json = d.toJSON();
+      json.filePath = fileToUrl(json.filePath);
+      return json;
+    }),
     },
   });
 });
@@ -83,7 +88,14 @@ exports.getPendingVerifications = catchAsync(async (req, res, next) => {
         where: { userId: driver.id },
         order: [['createdAt', 'DESC']],
       });
-      return { ...driver.toJSON(), documents };
+      return {
+        ...driver.toJSON(),
+        documents: documents.map((d) => {
+          const json = d.toJSON();
+          json.filePath = fileToUrl(json.filePath);
+          return json;
+        }),
+      };
     }),
   );
 
@@ -131,7 +143,11 @@ exports.reviewVerification = catchAsync(async (req, res, next) => {
     const allDocs = await DriverDocument.findAll({ where: { userId } });
     const allApproved = allDocs.every((d) => d.status === 'approved');
     if (allApproved) {
-      await driver.update({ isDriverVerified: true });
+      const profileDoc = allDocs.find((d) => d.documentType === 'profile_photo' && d.status === 'approved');
+      await driver.update({
+        isDriverVerified: true,
+        profilePhoto: profileDoc ? fileToUrl(profileDoc.filePath) : driver.profilePhoto,
+      });
       logger.info(`Driver verified: ${driver.email}`);
     }
   }

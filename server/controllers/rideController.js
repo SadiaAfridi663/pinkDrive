@@ -306,13 +306,19 @@ exports.cancelRide = catchAsync(async (req, res, next) => {
 exports.getRideHistory = catchAsync(async (req, res, next) => {
   const rides = await Ride.findAll({
     where: {
-      [Op.or]: [
-        { passengerId: req.user.id },
-        { driverId: req.user.id },
-      ],
-      [Op.or]: [
-        { status: 'completed' },
-        { status: 'cancelled' },
+      [Op.and]: [
+        {
+          [Op.or]: [
+            { passengerId: req.user.id },
+            { driverId: req.user.id },
+          ],
+        },
+        {
+          [Op.or]: [
+            { status: 'completed' },
+            { status: 'cancelled' },
+          ],
+        },
       ],
     },
     order: [['createdAt', 'DESC']],

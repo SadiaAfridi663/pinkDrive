@@ -8,7 +8,8 @@ const STATES = {
 };
 
 function useGeolocation() {
-  const [permissionState, setPermissionState] = useState(STATES.PROMPT);
+  const [permissionState, setPermissionState] = useState(null);
+  const [resolved, setResolved] = useState(false);
   const [position, setPosition] = useState(null);
   const [error, setError] = useState(null);
   const watchIdRef = useRef(null);
@@ -65,6 +66,7 @@ function useGeolocation() {
 
   useEffect(() => {
     if (!navigator.permissions) {
+      setResolved(true);
       if (navigator.geolocation && !requestedRef.current) {
         requestedRef.current = true;
         request();
@@ -73,6 +75,7 @@ function useGeolocation() {
     }
     navigator.permissions.query({ name: 'geolocation' }).then((result) => {
       setPermissionState(result.state);
+      setResolved(true);
       if (result.state === 'granted' && !requestedRef.current) {
         requestedRef.current = true;
         request();
@@ -84,7 +87,7 @@ function useGeolocation() {
           request();
         }
       });
-    }).catch(() => {});
+    }).catch(() => { setResolved(true); });
   }, [request]);
 
   useEffect(() => {
@@ -95,6 +98,7 @@ function useGeolocation() {
     permissionState,
     position,
     error,
+    isChecking: permissionState === null && !resolved,
     isAvailable: permissionState !== STATES.UNAVAILABLE,
     isDenied: permissionState === STATES.DENIED,
     isGranted: permissionState === STATES.GRANTED,

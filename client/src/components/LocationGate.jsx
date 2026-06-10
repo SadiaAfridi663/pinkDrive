@@ -1,7 +1,20 @@
 import useGeolocation from '../hooks/useGeolocation';
 
 function LocationGate({ children }) {
-  const { permissionState, error, request, isDenied, isGranted } = useGeolocation();
+  const { permissionState, error, request, isDenied, isGranted, isChecking } = useGeolocation();
+
+  if (isChecking) {
+    return (
+      <div className="page">
+        <div className="page-header">
+          <h1>Location Required</h1>
+        </div>
+        <div className="card p-8" style={{ maxWidth: 400, margin: '0 auto', textAlign: 'center' }}>
+          <p className="text-stone text-sm">Checking location access...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (isDenied) {
     return (

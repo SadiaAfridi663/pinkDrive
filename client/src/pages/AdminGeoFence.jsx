@@ -16,11 +16,13 @@ function AdminGeoFence() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [adding, setAdding] = useState(false);
-  const [editingId, setEditingId] = useState(null);
   const [newName, setNewName] = useState('');
   const [newColor, setNewColor] = useState('#e91e8c');
   const [vertices, setVertices] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
 
   const mapRef = useRef(null);
   const containerRef = useRef(null);
@@ -28,6 +30,8 @@ function AdminGeoFence() {
   const polygonRef = useRef(null);
   const areaLayersRef = useRef([]);
   const verticesRef = useRef([]);
+  const clickHandlerRef = useRef(null);
+  const searchTimeoutRef = useRef(null);
 
   const fetchAreas = useCallback(async () => {
     try {
@@ -40,9 +44,7 @@ function AdminGeoFence() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchAreas();
-  }, [fetchAreas]);
+  useEffect(() => { fetchAreas(); }, [fetchAreas]);
 
   useEffect(() => {
     if (mapRef.current || !containerRef.current) return;
@@ -59,12 +61,7 @@ function AdminGeoFence() {
     observer.observe(containerRef.current);
 
     mapRef.current = map;
-
-    return () => {
-      observer.disconnect();
-      map.remove();
-      mapRef.current = null;
-    };
+    return () => { observer.disconnect(); map.remove(); mapRef.current = null; };
   }, []);
 
   const renderAreaPolygons = useCallback(() => {
@@ -76,34 +73,24 @@ function AdminGeoFence() {
       if (!area.coordinates || area.coordinates.length < 3) continue;
       const coords = area.coordinates.map(([lat, lng]) => [lat, lng]);
       const poly = L.polygon(coords, {
-        color: area.color || '#e91e8c',
-        weight: 2,
-        opacity: 0.8,
-        fillColor: area.color || '#e91e8c',
-        fillOpacity: 0.12,
+        color: area.color || '#e91e8c', weight: 2, opacity: 0.8,
+        fillColor: area.color || '#e91e8c', fillOpacity: 0.12,
       }).addTo(map);
       poly.bindPopup(`<strong>${area.name}</strong>`);
       areaLayersRef.current.push(poly);
     }
   }, [areas]);
 
-  useEffect(() => {
-    renderAreaPolygons();
-  }, [renderAreaPolygons]);
+  useEffect(() => { renderAreaPolygons(); }, [renderAreaPolygons]);
 
   const clearDrawing = () => {
     const map = mapRef.current;
     if (!map) return;
     for (const m of vertexMarkersRef.current) map.removeLayer(m);
     vertexMarkersRef.current = [];
-    if (polygonRef.current) {
-      map.removeLayer(polygonRef.current);
-      polygonRef.current = null;
-    }
+    if (polygonRef.current) { map.removeLayer(polygonRef.current); polygonRef.current = null; }
     renderAreaPolygons();
   };
-
-  const clickHandlerRef = useRef(null);
 
   const startAdd = () => {
     setAdding(true);
@@ -132,10 +119,7 @@ function AdminGeoFence() {
       if (updated.length >= 3) {
         const coords = updated.map((v) => [v.lat, v.lng]);
         polygonRef.current = L.polygon(coords, {
-          color: newColor,
-          weight: 2,
-          fillColor: newColor,
-          fillOpacity: 0.2,
+          color: newColor, weight: 2, fillColor: newColor, fillOpacity: 0.2,
         }).addTo(map);
       }
     };
@@ -147,10 +131,7 @@ function AdminGeoFence() {
   const cancelAdd = () => {
     const map = mapRef.current;
     if (map) {
-      if (clickHandlerRef.current) {
-        map.off('click', clickHandlerRef.current);
-        clickHandlerRef.current = null;
-      }
+      if (clickHandlerRef.current) { map.off('click', clickHandlerRef.current); clickHandlerRef.current = null; }
       clearDrawing();
     }
     setAdding(false);
@@ -170,11 +151,8 @@ function AdminGeoFence() {
       setMessage(`Service area "${newName.trim()}" created.`);
       cancelAdd();
       await fetchAreas();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to create service area.');
-    } finally {
-      setSaving(false);
-    }
+    } catch (err) { setError(err.response?.data?.message || 'Failed to create service area.'); }
+    finally { setSaving(false); }
   };
 
   const deleteArea = async (id, name) => {
@@ -183,95 +161,133 @@ function AdminGeoFence() {
       await serviceAreaAPI.remove(id);
       setMessage(`Service area "${name}" deleted.`);
       await fetchAreas();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to delete.');
-    }
+    } catch (err) { setError(err.response?.data?.message || 'Failed to delete.'); }
   };
 
   const toggleActive = async (area) => {
     try {
       await serviceAreaAPI.update(area.id, { isActive: !area.isActive });
       await fetchAreas();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to update.');
-    }
+    } catch (err) { setError(err.response?.data?.message || 'Failed to update.'); }
+  };
+
+  const handleSearch = (query) => {
+    setSearchQuery(query);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+
+    if (!query.trim()) { setSearchResults([]); return; }
+
+    searchTimeoutRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&countrycodes=pk`
+        );
+        const data = await res.json();
+        setSearchResults(data);
+      } catch { setSearchResults([]); }
+      finally { setSearching(false); }
+    }, 400);
+  };
+
+  const selectResult = (result) => {
+    const lat = parseFloat(result.lat);
+    const lon = parseFloat(result.lon);
+    const map = mapRef.current;
+    if (map) map.flyTo([lat, lon], 14);
+    setSearchQuery(result.display_name.split(',')[0]);
+    setSearchResults([]);
   };
 
   return (
-    <div className="max-w-page mx-auto px-6 py-8 pb-16">
-      {loading && <div className="flex items-center justify-center min-h-[60vh] text-text-light text-sm">Loading...</div>}
-      {!loading && (
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="font-display text-[2.2rem] font-bold text-plum tracking-[-0.02em] leading-[1.15] m-0">Service Areas</h1>
-            <p className="text-[0.95rem] text-text-muted mt-1 m-0">Manage geo-fence boundaries</p>
+    <div className="page-wide">
+      <div className="page-header page-header-accent">
+        <h1>Service Areas</h1>
+        <p>Manage geo-fence boundaries</p>
+      </div>
+
+      {error && <p className="msg msg-error">{error}</p>}
+      {message && <p className="msg msg-success">{message}</p>}
+
+      {/* Place Search */}
+      <div className="relative mb-3">
+        <input
+          className="input pr-10"
+          placeholder="Search for a place..."
+          value={searchQuery}
+          onChange={(e) => handleSearch(e.target.value)}
+        />
+        {searching && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-stone">Searching...</span>}
+        {searchResults.length > 0 && (
+          <div className="absolute top-full left-0 right-0 z-[1000] bg-white border border-border rounded-sm shadow-lg mt-1">
+            {searchResults.map((r, i) => (
+              <button
+                key={i}
+                className="w-full text-left px-3 py-2 text-sm text-charcoal hover:bg-coral-light transition cursor-pointer border-none"
+                onClick={() => selectResult(r)}
+              >
+                <span className="block truncate">{r.display_name}</span>
+              </button>
+            ))}
           </div>
+        )}
+      </div>
+
+      {loading && <div className="text-center py-12 text-stone-light text-sm">Loading...</div>}
+
+      {!loading && (
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-sm text-stone m-0">{areas.length} area{areas.length !== 1 ? 's' : ''} defined</p>
           {!adding && (
-            <button className="inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-4 py-2 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark" onClick={startAdd}>
-              + Add Area
-            </button>
+            <button className="btn btn-primary btn-sm" onClick={startAdd}>+ Add Area</button>
           )}
         </div>
       )}
 
-      {error && <p className="bg-[#fff5f5] text-error border border-[#ffcdd2] px-3.5 py-2.5 rounded-sm text-sm mb-2">{error}</p>}
-      {message && <p className="bg-[#f1faf1] text-success border border-[#c8e6c9] px-3.5 py-2.5 rounded-sm text-sm mb-2">{message}</p>}
-
       <div ref={containerRef} className="w-full h-[350px] rounded-sm border-2 border-border overflow-hidden mb-6" />
 
       {adding && (
-        <div className="bg-white border border-border rounded-sm p-4 mb-6">
-          <h3 className="font-display text-base font-semibold text-plum m-0 mb-3">New Service Area</h3>
-          <p className="text-sm text-text-muted mb-3">Click on the map to draw polygon vertices (at least 3).</p>
+        <div className="card p-4 mb-6">
+          <h3 className="font-display text-base font-semibold text-navy m-0 mb-3">New Service Area</h3>
+          <p className="text-sm text-stone mb-3">Click on the map to draw polygon vertices (at least 3).</p>
           <div className="flex items-center gap-3 mb-3 flex-wrap">
-            <input
-              className="flex-1 min-w-[200px] px-3 py-2 text-sm border border-border rounded-sm bg-white text-text placeholder:text-text-light focus:outline-none focus:border-pink"
-              placeholder="Area name"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-            />
-            <label className="flex items-center gap-2 text-sm text-text-muted">
+            <input className="input flex-1 min-w-[200px]" placeholder="Area name" value={newName} onChange={(e) => setNewName(e.target.value)} />
+            <label className="flex items-center gap-2 text-sm text-stone">
               Color:
               <input type="color" value={newColor} onChange={(e) => setNewColor(e.target.value)} className="w-8 h-8 border-none rounded cursor-pointer" />
             </label>
-            <span className="text-xs text-text-muted">{vertices.length} vertices placed</span>
+            <span className="text-xs text-stone">{vertices.length} vertices placed</span>
           </div>
           <div className="flex gap-2">
-            <button className="bg-transparent border-2 border-border text-text-muted hover:border-pink hover:text-pink inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm rounded-sm px-4 py-2 cursor-pointer transition" onClick={cancelAdd}>Cancel</button>
-            <button className="inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-4 py-2 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark disabled:opacity-50 disabled:cursor-not-allowed" onClick={saveArea} disabled={saving || vertices.length < 3 || !newName.trim()}>
+            <button className="btn btn-secondary" onClick={cancelAdd}>Cancel</button>
+            <button className="btn btn-primary" onClick={saveArea} disabled={saving || vertices.length < 3 || !newName.trim()}>
               {saving ? 'Saving...' : 'Save Area'}
             </button>
           </div>
         </div>
       )}
 
+      {areas.length === 0 && !adding && (
+        <div className="empty-state">
+          <p className="text-sm text-stone">No service areas defined yet. Click "+ Add Area" to create one.</p>
+        </div>
+      )}
+
       <div className="flex flex-col gap-2">
-        {areas.length === 0 && (
-          <div className="text-center p-8">
-            <p className="text-sm text-text-muted">No service areas defined yet. Click "+ Add Area" to create one.</p>
-          </div>
-        )}
         {areas.map((area) => (
-          <div key={area.id} className="flex items-center gap-3 px-4 py-3.5 bg-white border border-border rounded-sm">
+          <div key={area.id} className="card-list flex items-center gap-3">
             <span className="w-4 h-4 rounded-sm flex-shrink-0" style={{ backgroundColor: area.color || '#e91e8c' }} />
             <div className="flex-1 flex flex-col gap-0.5">
-              <span className="text-sm font-semibold text-plum">{area.name}</span>
-              <span className="text-xs text-text-muted">{area.coordinates.length} vertices &middot; {area.isActive ? 'Active' : 'Inactive'}</span>
+              <span className="text-sm font-semibold text-navy">{area.name}</span>
+              <span className="text-xs text-stone">{area.coordinates.length} vertices &middot; {area.isActive ? 'Active' : 'Inactive'}</span>
             </div>
             <button
-              className={`px-2.5 py-1 text-xs font-semibold border rounded-sm cursor-pointer transition ${
-                area.isActive
-                  ? 'bg-[#fff8e1] text-warning border-[#ffe082] hover:bg-[#ffecb3]'
-                  : 'bg-[#e8f5e9] text-success border-[#c8e6c9] hover:bg-[#c8e6c9]'
-              }`}
+              className={`px-2.5 py-1 text-xs font-semibold border rounded-sm cursor-pointer transition ${area.isActive ? 'bg-[#fff8e1] text-warning border-[#ffe082] hover:bg-[#ffecb3]' : 'bg-[#e8f5e9] text-success border-[#c8e6c9] hover:bg-[#c8e6c9]'}`}
               onClick={() => toggleActive(area)}
             >
               {area.isActive ? 'Deactivate' : 'Activate'}
             </button>
-            <button
-              className="px-2.5 py-1 text-xs font-semibold border border-border rounded-sm text-text-muted bg-transparent hover:text-error hover:border-error cursor-pointer transition"
-              onClick={() => deleteArea(area.id, area.name)}
-            >
+            <button className="px-2.5 py-1 text-xs font-semibold border border-border rounded-sm text-stone bg-transparent hover:text-error hover:border-error cursor-pointer transition" onClick={() => deleteArea(area.id, area.name)}>
               Delete
             </button>
           </div>

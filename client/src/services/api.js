@@ -46,6 +46,7 @@ export const adminAPI = {
   getUsers: (params) => api.get('/admin/users', { params }),
   suspendUser: (id) => api.patch(`/admin/users/${id}/suspend`),
   getAllRides: (params) => api.get('/admin/rides', { params }),
+  getRideById: (id) => api.get(`/admin/rides/${id}`),
   getActivities: (params) => api.get('/admin/activities', { params }),
 };
 

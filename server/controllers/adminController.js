@@ -1,10 +1,12 @@
 const User = require('../models/User');
 const Ride = require('../models/Ride');
 const SOSAlert = require('../models/SOSAlert');
+const DriverDocument = require('../models/DriverDocument');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/AppError');
 const { Op } = require('sequelize');
 const logger = require('../utils/logger');
+const { fileToUrl } = require('../utils/geo');
 
 exports.getStats = catchAsync(async (req, res, next) => {
   const [totalUsers, totalRides, totalRevenue, pendingVerifications, activeSOS] = await Promise.all([
@@ -110,15 +112,60 @@ exports.getAllRides = catchAsync(async (req, res, next) => {
     order: [['createdAt', 'DESC']],
   });
 
+  const userIds = new Set();
+  rows.forEach(r => { if (r.passengerId) userIds.add(r.passengerId); if (r.driverId) userIds.add(r.driverId); });
+
+  const userMap = {};
+  if (userIds.size > 0) {
+    const users = await User.findAll({
+      where: { id: { [Op.in]: [...userIds] } },
+      attributes: ['id', 'name', 'email', 'phone', 'profilePhoto', 'role'],
+    });
+    users.forEach(u => { userMap[u.id] = u; });
+  }
+
+  const rides = rows.map(r => ({
+    ...r.toJSON(),
+    passenger: r.passengerId ? userMap[r.passengerId] || null : null,
+    driver: r.driverId ? userMap[r.driverId] || null : null,
+  }));
+
   res.status(200).json({
     success: true,
     data: {
-      rides: rows,
+      rides,
       total: count,
       pages: Math.ceil(count / limit),
       currentPage: parseInt(page),
     },
   });
+});
+
+exports.getRideById = catchAsync(async (req, res, next) => {
+  const ride = await Ride.findByPk(req.params.id);
+  if (!ride) return next(new AppError('Ride not found.', 404));
+
+  let driver = null;
+  let passenger = null;
+
+  if (ride.driverId) {
+    driver = await User.findByPk(ride.driverId, { attributes: ['id', 'name', 'phone', 'email', 'profilePhoto'] });
+    if (driver) {
+      driver = driver.toJSON();
+      const profileDoc = await DriverDocument.findOne({
+        where: { userId: ride.driverId, documentType: 'profile_photo' },
+      });
+      driver.profilePhoto = profileDoc ? fileToUrl(profileDoc.filePath) : null;
+    }
+  }
+
+  passenger = await User.findByPk(ride.passengerId, { attributes: ['id', 'name', 'email', 'profilePhoto'] });
+  if (passenger) {
+    passenger = passenger.toJSON();
+    passenger.selfiePath = ride.selfiePath ? fileToUrl(ride.selfiePath) : null;
+  }
+
+  res.status(200).json({ success: true, data: { ride, driver, passenger } });
 });
 
 exports.getActivities = catchAsync(async (req, res, next) => {

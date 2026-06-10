@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminAPI } from '../services/api';
+import Avatar from '../components/Avatar';
 
 const STATUS_COLORS = {
   pending: 'bg-[#fff8e1] text-warning',
@@ -8,8 +9,10 @@ const STATUS_COLORS = {
   arrived: 'bg-[#e3f2fd] text-[#1565c0]',
   in_progress: 'bg-[#f3e5f5] text-[#7b1fa2]',
   completed: 'bg-[#e8f5e9] text-success',
-  cancelled: 'bg-[#f5f5f5] text-text-light',
+  cancelled: 'bg-[#f5f5f5] text-stone-light',
 };
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 function AdminRides() {
   const [rides, setRides] = useState([]);
@@ -42,21 +45,21 @@ function AdminRides() {
   useEffect(() => { fetchRides(); }, [fetchRides]);
 
   return (
-    <div className="max-w-page mx-auto px-6 py-8 pb-16">
+    <div className="page-wide">
       <div className="mb-6">
-        <h1 className="font-display text-[2.2rem] font-bold text-plum tracking-[-0.02em] leading-[1.15] m-0">Rides</h1>
-        <p className="text-[0.95rem] text-text-muted mt-1 m-0">{total} total rides</p>
+        <h1 className="font-display text-[2.2rem] font-bold text-navy tracking-[-0.02em] leading-[1.15] m-0">Rides</h1>
+        <p className="text-[0.95rem] text-stone mt-1 m-0">{total} total rides</p>
       </div>
 
       <div className="flex gap-2 mb-4 flex-wrap">
         <input
-          className="flex-1 min-w-[200px] px-3 py-2 text-sm border border-border rounded-sm bg-white text-text placeholder:text-text-light focus:outline-none focus:border-pink"
+          className="flex-1 min-w-[200px] px-3 py-2 text-sm border border-border rounded-sm bg-white text-charcoal placeholder:text-stone-light focus:outline-none focus:border-coral"
           placeholder="Search by address..."
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
         />
         <select
-          className="px-3 py-2 text-sm border border-border rounded-sm bg-white text-text focus:outline-none focus:border-pink"
+          className="px-3 py-2 text-sm border border-border rounded-sm bg-white text-charcoal focus:outline-none focus:border-coral"
           value={statusFilter}
           onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
         >
@@ -71,17 +74,18 @@ function AdminRides() {
       </div>
 
       {loading ? (
-        <div className="text-center py-12 text-text-light text-sm">Loading...</div>
+        <div className="text-center py-12 text-stone-light text-sm">Loading...</div>
       ) : rides.length === 0 ? (
-        <div className="text-center p-12 bg-white border border-border rounded-sm">
-          <h3 className="font-display text-[1.2rem] font-semibold text-plum m-0 mb-1">No rides found</h3>
+        <div className="text-center p-12 card">
+          <h3 className="font-display text-[1.2rem] font-semibold text-navy m-0 mb-1">No rides found</h3>
         </div>
       ) : (
-        <div className="bg-white border border-border rounded-sm overflow-hidden">
+        <div className="card overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-off-white text-text-muted text-xs uppercase tracking-[0.05em]">
+              <tr className="bg-ivory text-stone text-xs uppercase tracking-[0.05em]">
                 <th className="text-left px-4 py-3 font-semibold">Passenger</th>
+                <th className="text-left px-4 py-3 font-semibold">Driver</th>
                 <th className="text-left px-4 py-3 font-semibold">Pickup</th>
                 <th className="text-left px-4 py-3 font-semibold">Dropoff</th>
                 <th className="text-left px-4 py-3 font-semibold">Fare</th>
@@ -91,15 +95,30 @@ function AdminRides() {
             </thead>
             <tbody>
               {rides.map((r) => (
-                <tr key={r.id} className="border-t border-border hover:bg-off-white/50 cursor-pointer" onClick={() => navigate(`/ride/${r.id}`)}>
-                  <td className="px-4 py-3 font-medium text-plum">{r.passengerId ? r.passengerId.slice(0, 8) : 'N/A'}</td>
-                  <td className="px-4 py-3 text-text-muted max-w-[160px] truncate">{r.pickupAddress || `${r.pickupLat?.toFixed(4)}, ${r.pickupLng?.toFixed(4)}`}</td>
-                  <td className="px-4 py-3 text-text-muted max-w-[160px] truncate">{r.dropoffAddress || `${r.dropoffLat?.toFixed(4)}, ${r.dropoffLng?.toFixed(4)}`}</td>
+                <tr key={r.id} className="border-t border-border hover:bg-ivory/50 cursor-pointer" onClick={() => navigate(`/admin/rides/${r.id}`)}>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <Avatar name={r.passenger?.name || 'Passenger'} size="sm" />
+                      <span className="font-medium text-navy">{r.passenger?.name || 'N/A'}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    {r.driver ? (
+                      <div className="flex items-center gap-2">
+                        <Avatar name={r.driver.name} size="sm" />
+                        <span className="text-navy">{r.driver.name}</span>
+                      </div>
+                    ) : (
+                      <span className="text-stone-light text-xs">Unassigned</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-stone max-w-[140px] truncate">{r.pickupAddress || `${r.pickupLat?.toFixed(4)}, ${r.pickupLng?.toFixed(4)}`}</td>
+                  <td className="px-4 py-3 text-stone max-w-[140px] truncate">{r.dropoffAddress || `${r.dropoffLat?.toFixed(4)}, ${r.dropoffLng?.toFixed(4)}`}</td>
                   <td className="px-4 py-3 font-mono">{r.fare ? `${r.fare} PKR` : 'N/A'}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-block text-xs font-semibold px-2 py-1 rounded ${STATUS_COLORS[r.status] || ''}`}>{r.status}</span>
                   </td>
-                  <td className="px-4 py-3 text-text-light text-xs">{new Date(r.createdAt).toLocaleDateString()}</td>
+                  <td className="px-4 py-3 text-stone-light text-xs">{new Date(r.createdAt).toLocaleDateString()}</td>
                 </tr>
               ))}
             </tbody>
@@ -109,9 +128,9 @@ function AdminRides() {
 
       {pages > 1 && (
         <div className="flex items-center justify-center gap-2 mt-4">
-          <button className="px-3 py-1.5 text-sm border border-border rounded-sm bg-white text-text-muted hover:border-pink hover:text-pink disabled:opacity-30 cursor-pointer transition" disabled={page <= 1} onClick={() => setPage(page - 1)}>Prev</button>
-          <span className="text-sm text-text-muted">Page {page} of {pages}</span>
-          <button className="px-3 py-1.5 text-sm border border-border rounded-sm bg-white text-text-muted hover:border-pink hover:text-pink disabled:opacity-30 cursor-pointer transition" disabled={page >= pages} onClick={() => setPage(page + 1)}>Next</button>
+          <button className="px-3 py-1.5 text-sm border border-border rounded-sm bg-white text-stone hover:border-coral hover:text-coral disabled:opacity-30 cursor-pointer transition" disabled={page <= 1} onClick={() => setPage(page - 1)}>Prev</button>
+          <span className="text-sm text-stone">Page {page} of {pages}</span>
+          <button className="px-3 py-1.5 text-sm border border-border rounded-sm bg-white text-stone hover:border-coral hover:text-coral disabled:opacity-30 cursor-pointer transition" disabled={page >= pages} onClick={() => setPage(page + 1)}>Next</button>
         </div>
       )}
     </div>
