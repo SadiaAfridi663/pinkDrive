@@ -23,6 +23,7 @@ import PassengerDashboard from './pages/PassengerDashboard';
 import RequestRide from './pages/RequestRide';
 import ActiveRide from './pages/ActiveRide';
 import RideDetail from './pages/RideDetail';
+import PaymentCheckout from './pages/PaymentCheckout';
 
 function Home() {
   const { user } = useContext(AuthContext);
@@ -65,6 +66,7 @@ function App() {
         <Route path="/ride/request" element={<Layout roles={['passenger']}><RequestRide /></Layout>} />
         <Route path="/ride/active" element={<Layout roles={['passenger', 'driver']}><ActiveRide /></Layout>} />
         <Route path="/ride/:id" element={<Layout roles={['passenger', 'driver']}><RideDetail /></Layout>} />
+        <Route path="/payment/result" element={<Layout roles={['passenger']}><PaymentCheckout /></Layout>} />
         <Route path="/" element={<Layout><Home /></Layout>} />
       </Routes>
     </SocketProvider>

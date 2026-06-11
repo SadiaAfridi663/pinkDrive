@@ -15,6 +15,7 @@ const { createTransporter } = require('./config/mail');
 const errorMiddleware = require('./middleware/errorMiddleware');
 const logger = require('./utils/logger');
 const { setupSocketHandlers } = require('./sockets');
+const paymentController = require('./controllers/paymentController');
 
 const app = express();
 const server = http.createServer(app);
@@ -32,6 +33,13 @@ async function start() {
 
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
+
+  const paymentRoutes = require('./routes/payments');
+
+  // Stripe webhook — must use express.raw() BEFORE global express.json()
+  // to preserve the raw body for signature verification
+  app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), paymentController.handleWebhook);
+
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());
@@ -67,6 +75,8 @@ async function start() {
 
   const adminRoutes = require('./routes/admin');
   app.use('/api/admin', adminRoutes);
+
+  app.use('/api/payments', paymentRoutes);
 
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
   app.use(errorMiddleware);

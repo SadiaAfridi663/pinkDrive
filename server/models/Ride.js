@@ -105,6 +105,10 @@ const Ride = sequelize.define('Ride', {
     type: DataTypes.DATE,
     allowNull: true,
   },
+  stripeSessionId: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
 }, {
   timestamps: true,
   tableName: 'rides',

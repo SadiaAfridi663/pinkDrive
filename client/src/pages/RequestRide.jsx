@@ -72,7 +72,7 @@ function RequestRideInner() {
       const formData = new FormData();
       formData.append('selfie', blob, 'selfie.jpg');
       const selfieRes = await rideAPI.uploadTempSelfie(formData);
-      await rideAPI.createRide({
+      const rideRes = await rideAPI.createRide({
         pickupLat: pickup.lat,
         pickupLng: pickup.lng,
         dropoffLat: dropoff.lat,
@@ -80,7 +80,13 @@ function RequestRideInner() {
         selfiePath: selfieRes.data.data.selfiePath,
         paymentMethod,
       });
-      navigate('/ride/active');
+
+      const checkoutUrl = rideRes.data.data.checkoutUrl;
+      if (checkoutUrl) {
+        window.location.href = checkoutUrl;
+      } else {
+        navigate('/ride/active');
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to create ride.');
     } finally {
@@ -231,7 +237,12 @@ function RequestRideInner() {
           </div>
 
           <div
-            className="flex-1 flex flex-col items-center gap-1 p-3 border-2 rounded-sm border-border text-text bg-off-white opacity-50 cursor-not-allowed mb-2"
+            className={`flex-1 flex flex-col items-center gap-1 p-3 border-2 rounded-sm cursor-pointer transition text-sm mb-2 ${
+              paymentMethod === 'stripe'
+                ? 'border-pink bg-pink-subtle text-pink font-semibold'
+                : 'border-border text-text bg-off-white hover:border-pink'
+            }`}
+            onClick={() => setPaymentMethod('stripe')}
           >
             <div className="flex items-center gap-3 w-full">
               <span className="text-[1.3rem]">&#x1F4B3;</span>
@@ -239,7 +250,7 @@ function RequestRideInner() {
                 <div className="font-semibold">Stripe / Card</div>
                 <div className="text-xs text-text-muted">Pay online with credit/debit card</div>
               </div>
-              <span className="text-xs bg-pink-subtle text-pink px-2 py-0.5 rounded font-semibold">Coming soon</span>
+              {paymentMethod === 'stripe' && <span className="text-pink font-bold text-sm">Selected</span>}
             </div>
           </div>
 

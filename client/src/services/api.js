@@ -79,6 +79,11 @@ export const serviceAreaAPI = {
   remove: (id) => api.delete(`/service-areas/${id}`),
 };
 
+export const paymentsAPI = {
+  createCheckoutSession: (rideId) => api.post('/payments/create-checkout-session', { rideId }),
+  getSessionStatus: (sessionId) => api.get('/payments/session-status', { params: { session_id: sessionId } }),
+};
+
 export const sosAPI = {
   trigger: (data) => api.post('/sos/trigger', data),
   getAlerts: (status) => api.get('/sos/alerts', { params: { status } }),

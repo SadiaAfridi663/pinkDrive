@@ -7,6 +7,7 @@ const catchAsync = require('../utils/catchAsync');
 const logger = require('../utils/logger');
 const { reverseGeocodeBoth, haversineDistance, fileToUrl, isPointInPolygon } = require('../utils/geo');
 const ServiceArea = require('../models/ServiceArea');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { getOnlineDrivers, getIO } = require('../sockets');
 
 const RIDE_STATUS_FLOW = ['pending', 'accepted', 'arrived', 'in_progress', 'completed'];
@@ -67,10 +68,43 @@ exports.createRide = catchAsync(async (req, res, next) => {
 
   logger.info(`Ride created: ${ride.id} by passenger ${req.user.email}`);
 
+  let checkoutUrl = null;
+
+  if (ride.paymentMethod === 'stripe') {
+    const amount = parseFloat(ride.fare);
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'payment',
+      client_reference_id: ride.id,
+      customer_email: req.user.email,
+      line_items: [
+        {
+          price_data: {
+            currency: 'pkr',
+            product_data: {
+              name: 'PinkDrive Ride',
+              description: `${ride.pickupAddress || `${ride.pickupLat}, ${ride.pickupLng}`} → ${ride.dropoffAddress || `${ride.dropoffLat}, ${ride.dropoffLng}`}`,
+            },
+            unit_amount: Math.round(amount * 100),
+          },
+          quantity: 1,
+        },
+      ],
+      success_url: `${process.env.CLIENT_URL}/payment/result?session_id={CHECKOUT_SESSION_ID}&status=success`,
+      cancel_url: `${process.env.CLIENT_URL}/payment/result?status=cancelled`,
+    });
+
+    ride.stripeSessionId = session.id;
+    await ride.save();
+    checkoutUrl = session.url;
+
+    logger.info(`Stripe session created for ride ${ride.id}: ${session.id}`);
+  }
+
   res.status(201).json({
     success: true,
-    data: { ride },
-    message: 'Ride requested. Waiting for a driver.',
+    data: { ride, checkoutUrl },
+    message: checkoutUrl ? 'Ride requested. Complete payment to proceed.' : 'Ride requested. Waiting for a driver.',
   });
 });
 
