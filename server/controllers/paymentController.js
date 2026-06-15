@@ -85,6 +85,15 @@ exports.getSessionStatus = catchAsync(async (req, res, next) => {
   }
 });
 
+exports.getConfig = catchAsync(async (req, res) => {
+  const key = process.env.STRIPE_SECRET_KEY || '';
+  const stripeConfigured = key.length > 0 && !key.includes('placeholder') && !key.includes('xxxxxxxx');
+  res.status(200).json({
+    success: true,
+    data: { stripeConfigured },
+  });
+});
+
 exports.handleWebhook = async (req, res) => {
   const sig = req.headers['stripe-signature'];
 

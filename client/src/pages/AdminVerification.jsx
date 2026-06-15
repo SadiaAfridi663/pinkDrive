@@ -37,6 +37,8 @@ function AdminVerification() {
     fetchPending();
   }, []);
 
+
+
   const handleReview = async (userId, action) => {
     setActioning(userId);
     setError('');
@@ -89,54 +91,69 @@ function AdminVerification() {
         </div>
       ) : (
         <div className="flex flex-col gap-4">
-          {drivers.map((driver) => (
-            <div key={driver.id} className="card-list p-4">
-              <div className="flex justify-between items-center mb-1">
-                <strong>{driver.name}</strong>
-                <span className={badgeClass('pending')}>Pending</span>
-              </div>
-              <p className="text-sm text-stone my-0.5">{driver.email}</p>
-              {driver.phone && <p className="text-sm text-stone my-0.5">{driver.phone}</p>}
-              <p className="text-sm text-stone my-0.5">Registered: {new Date(driver.createdAt).toLocaleDateString()}</p>
+          {drivers.map((driver) => {
+            const profileImage = driver.documents?.find(
+              (doc) => doc.documentType === 'profile_photo'
+            );
 
-              <div className="my-3 flex flex-col gap-1.5">
-                {driver.documents.filter((d) => d.status === 'pending').map((doc) => (
-                  <div key={doc.id} className="flex justify-between items-center text-sm">
-                    <span className="text-charcoal">
-                      {doc.documentType === 'license' && "Driver's License"}
-                      {doc.documentType === 'registration' && 'Vehicle Registration'}
-                      {doc.documentType === 'profile_photo' && 'Profile Photo'}
-                    </span>
-                    <a
-                      href={getFileUrl(doc.filePath)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-coral no-underline font-medium text-xs hover:underline"
-                    >
-                      View
-                    </a>
+            return (
+              <div key={driver.id} className="card-list p-4">
+                <div className="flex justify-between items-center mb-1">
+                  <div className="flex items-center gap-3">
+                    {profileImage && (
+                      <img
+                        src={getFileUrl(profileImage.filePath)}
+                        alt={driver.name}
+                        className="w-10 h-10 rounded-full object-cover border-2 border-border"
+                      />
+                    )}
+                    <strong>{driver.name}</strong>
                   </div>
-                ))}
-              </div>
+                  <span className={badgeClass('pending')}>Pending</span>
+                </div>
+                <p className="text-sm text-stone my-0.5">{driver.email}</p>
+                {driver.phone && <p className="text-sm text-stone my-0.5">{driver.phone}</p>}
+                <p className="text-sm text-stone my-0.5">Registered: {new Date(driver.createdAt).toLocaleDateString()}</p>
 
-              <div className="flex gap-2 mt-3">
-                <button
-                  className="btn btn-success flex-1"
-                  disabled={actioning === driver.id}
-                  onClick={() => handleReview(driver.id, 'approved')}
-                >
-                  {actioning === driver.id ? 'Processing...' : 'Approve'}
-                </button>
-                <button
-                  className="btn btn-danger flex-1"
-                  disabled={actioning === driver.id}
-                  onClick={() => handleReview(driver.id, 'rejected')}
-                >
-                  Reject
-                </button>
+                <div className="my-3 flex flex-col gap-1.5">
+                  {driver.documents.filter((d) => d.status === 'pending').map((doc) => (
+                    <div key={doc.id} className="flex justify-between items-center text-sm">
+                      <span className="text-charcoal">
+                        {doc.documentType === 'license' && "Driver's License"}
+                        {doc.documentType === 'registration' && 'Vehicle Registration'}
+                        {doc.documentType === 'profile_photo' && 'Profile Photo'}
+                      </span>
+                      <a
+                        href={getFileUrl(doc.filePath)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-coral no-underline font-medium text-xs hover:underline"
+                      >
+                        View
+                      </a>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex gap-2 mt-3">
+                  <button
+                    className="btn btn-primary btn-success flex-1"
+                    disabled={actioning === driver.id}
+                    onClick={() => handleReview(driver.id, 'approved')}
+                  >
+                    {actioning === driver.id ? 'Processing...' : 'Approve'}
+                  </button>
+                  <button
+                    className="btn btn-danger flex-1"
+                    disabled={actioning === driver.id}
+                    onClick={() => handleReview(driver.id, 'rejected')}
+                  >
+                    Reject
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

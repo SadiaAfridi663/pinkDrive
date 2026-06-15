@@ -1,18 +1,25 @@
 @import "tailwindcss";
 
 @theme {
-  --color-navy: #1A1A2E;
-  --color-navy-dark: #0F0F1A;
-  --color-navy-light: #2A2A42;
-  --color-coral: #FF6B6B;
-  --color-coral-dark: #E55050;
-  --color-coral-light: #FFF0F0;
-  --color-ivory: #FAF8F5;
+  --color-navy: #880E4F;
+  --color-navy-dark: #4A0033;
+  --color-navy-light: #AD1457;
+  --color-coral: #E91E8C;
+  --color-coral-dark: #C2185B;
+  --color-coral-light: #FCE4EC;
+  --color-pink: #E91E8C;
+  --color-pink-dark: #C2185B;
+  --color-pink-subtle: #FCE4EC;
+  --color-plum: #880E4F;
+  --color-ivory: #FFF8FA;
   --color-white: #FFFFFF;
-  --color-border: #E8E4E0;
+  --color-border: #F0E0E8;
   --color-stone: #8B8B9E;
   --color-stone-light: #B0B0C0;
   --color-charcoal: #1A1A1A;
+  --color-text-muted: #9E9E9E;
+  --color-text-light: #BDBDBD;
+  --color-off-white: #FFFBFB;
   --color-error: #D32F2F;
   --color-success: #2E7D32;
   --color-warning: #E67E22;
@@ -69,7 +76,7 @@
     background: var(--color-coral-dark);
     border-color: var(--color-coral-dark);
     transform: translateY(-1px);
-    box-shadow: 0 4px 14px rgba(255, 107, 107, 0.3);
+    box-shadow: 0 4px 14px rgba(233, 30, 140, 0.3);
   }
   .btn-secondary {
     background: transparent;
@@ -114,13 +121,13 @@
   .card {
     background: var(--color-white);
     border-radius: var(--radius);
-    box-shadow: 0 1px 3px rgba(26, 26, 46, 0.06);
+    box-shadow: 0 1px 3px rgba(136, 14, 79, 0.06);
   }
   .card-hover {
     transition: all 0.15s ease;
   }
   .card-hover:hover {
-    box-shadow: 0 4px 12px rgba(26, 26, 46, 0.1);
+    box-shadow: 0 4px 12px rgba(136, 14, 79, 0.1);
     transform: translateY(-1px);
   }
   .card-list {
@@ -155,7 +162,7 @@
   }
   .input:focus {
     border-color: var(--color-coral);
-    box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.12);
+    box-shadow: 0 0 0 3px rgba(233, 30, 140, 0.12);
   }
   select.input {
     appearance: auto;
@@ -249,6 +256,11 @@
     flex-shrink: 0;
   }
 
+  .badge-pink {
+    background: var(--color-coral-light);
+    color: var(--color-coral);
+  }
+
   .stat-card {
     background: var(--color-white);
     border: 1px solid var(--color-border);
@@ -302,5 +314,10 @@
   @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
+  }
+
+  @keyframes toast-shrink {
+    from { width: 100%; }
+    to { width: 0%; }
   }
 }

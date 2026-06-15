@@ -2,6 +2,7 @@ import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import { useContext } from 'react';
 import { AuthContext } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
+import { ToastProvider } from './context/ToastContext';
 import Nav from './components/Nav';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
@@ -46,29 +47,31 @@ function Layout({ children, roles }) {
 function App() {
   return (
     <SocketProvider>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/verify-email" element={<VerifyEmail />} />
-        <Route path="/driver/verification" element={<Layout roles={['driver']}><DriverVerification /></Layout>} />
-        <Route path="/driver/dashboard" element={<Layout roles={['driver']}><DriverDashboard /></Layout>} />
-        <Route path="/driver/rides" element={<Layout roles={['driver']}><DriverRides /></Layout>} />
-        <Route path="/admin" element={<Layout roles={['admin']}><AdminDashboard /></Layout>} />
-        <Route path="/admin/verifications" element={<Layout roles={['admin']}><AdminVerification /></Layout>} />
-        <Route path="/admin/geo-fence" element={<Layout roles={['admin']}><AdminGeoFence /></Layout>} />
-        <Route path="/admin/sos" element={<Layout roles={['admin']}><AdminSOS /></Layout>} />
-        <Route path="/admin/users" element={<Layout roles={['admin']}><AdminUsers /></Layout>} />
-        <Route path="/admin/rides" element={<Layout roles={['admin']}><AdminRides /></Layout>} />
-        <Route path="/admin/rides/:id" element={<Layout roles={['admin']}><AdminRideDetail /></Layout>} />
-        <Route path="/admin/activity" element={<Layout roles={['admin']}><AdminActivity /></Layout>} />
-        <Route path="/emergency-contacts" element={<Layout roles={['passenger']}><EmergencyContacts /></Layout>} />
-        <Route path="/passenger" element={<Layout roles={['passenger']}><PassengerDashboard /></Layout>} />
-        <Route path="/ride/request" element={<Layout roles={['passenger']}><RequestRide /></Layout>} />
-        <Route path="/ride/active" element={<Layout roles={['passenger', 'driver']}><ActiveRide /></Layout>} />
-        <Route path="/ride/:id" element={<Layout roles={['passenger', 'driver']}><RideDetail /></Layout>} />
-        <Route path="/payment/result" element={<Layout roles={['passenger']}><PaymentCheckout /></Layout>} />
-        <Route path="/" element={<Layout><Home /></Layout>} />
-      </Routes>
+      <ToastProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/driver/verification" element={<Layout roles={['driver']}><DriverVerification /></Layout>} />
+          <Route path="/driver/dashboard" element={<Layout roles={['driver']}><DriverDashboard /></Layout>} />
+          <Route path="/driver/rides" element={<Layout roles={['driver']}><DriverRides /></Layout>} />
+          <Route path="/admin" element={<Layout roles={['admin']}><AdminDashboard /></Layout>} />
+          <Route path="/admin/verifications" element={<Layout roles={['admin']}><AdminVerification /></Layout>} />
+          <Route path="/admin/geo-fence" element={<Layout roles={['admin']}><AdminGeoFence /></Layout>} />
+          <Route path="/admin/sos" element={<Layout roles={['admin']}><AdminSOS /></Layout>} />
+          <Route path="/admin/users" element={<Layout roles={['admin']}><AdminUsers /></Layout>} />
+          <Route path="/admin/rides" element={<Layout roles={['admin']}><AdminRides /></Layout>} />
+          <Route path="/admin/rides/:id" element={<Layout roles={['admin']}><AdminRideDetail /></Layout>} />
+          <Route path="/admin/activity" element={<Layout roles={['admin']}><AdminActivity /></Layout>} />
+          <Route path="/emergency-contacts" element={<Layout roles={['passenger']}><EmergencyContacts /></Layout>} />
+          <Route path="/passenger" element={<Layout roles={['passenger']}><PassengerDashboard /></Layout>} />
+          <Route path="/ride/request" element={<Layout roles={['passenger']}><RequestRide /></Layout>} />
+          <Route path="/ride/active" element={<Layout roles={['passenger', 'driver']}><ActiveRide /></Layout>} />
+          <Route path="/ride/:id" element={<Layout roles={['passenger', 'driver']}><RideDetail /></Layout>} />
+          <Route path="/payment/result" element={<Layout roles={['passenger']}><PaymentCheckout /></Layout>} />
+          <Route path="/" element={<Layout><Home /></Layout>} />
+        </Routes>
+      </ToastProvider>
     </SocketProvider>
   );
 }

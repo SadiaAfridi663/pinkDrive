@@ -2,6 +2,17 @@ import { useState, useEffect, useCallback } from 'react';
 import { adminAPI } from '../services/api';
 import Avatar from '../components/Avatar';
 
+const API_URL = import.meta.env.VITE_API_URL
+  ? import.meta.env.VITE_API_URL.replace('/api', '')
+  : 'http://localhost:5000';
+
+const getFileUrl = (filePath) => {
+  if (!filePath) return null;
+  const normalized = filePath.replace(/\\/g, '/');
+  if (normalized.startsWith('http://') || normalized.startsWith('https://')) return normalized;
+  return `${API_URL}/${normalized}`;
+};
+
 function AdminUsers() {
   const [users, setUsers] = useState([]);
   const [total, setTotal] = useState(0);
@@ -100,7 +111,7 @@ function AdminUsers() {
                 <tr key={u.id} className="border-t border-border hover:bg-ivory/50">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <Avatar name={u.name} size="sm" />
+                      <Avatar name={u.name} size="sm" src={getFileUrl(u.profilePhoto)} />
                       <span className="font-medium text-navy">{u.name}</span>
                     </div>
                   </td>

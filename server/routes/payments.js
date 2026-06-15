@@ -10,6 +10,7 @@ const checkoutLimiter = rateLimit({
   message: { success: false, message: 'Too many payment attempts. Please try again later.' },
 });
 
+router.get('/config', paymentController.getConfig);
 router.post('/create-checkout-session', authenticate, checkoutLimiter, paymentController.createCheckoutSession);
 router.get('/session-status', authenticate, paymentController.getSessionStatus);
 

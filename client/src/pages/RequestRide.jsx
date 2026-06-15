@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { rideAPI, serviceAreaAPI } from '../services/api';
+import { rideAPI, serviceAreaAPI, paymentsAPI } from '../services/api';
 import MapLocationPicker from '../components/MapLocationPicker';
 import RideRouteMap from '../components/RideRouteMap';
 import SelfieCapture from '../components/SelfieCapture';
@@ -17,6 +17,7 @@ function RequestRideInner() {
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [nearbyDrivers, setNearbyDrivers] = useState([]);
   const [serviceAreas, setServiceAreas] = useState([]);
+  const [stripeConfigured, setStripeConfigured] = useState(true);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -28,6 +29,18 @@ function RequestRideInner() {
       try {
         const res = await serviceAreaAPI.getActive();
         if (!cancelled) setServiceAreas(res.data.data.areas);
+      } catch { /* ignore */ }
+    };
+    fetch();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetch = async () => {
+      try {
+        const res = await paymentsAPI.getConfig();
+        if (!cancelled) setStripeConfigured(res.data.data.stripeConfigured);
       } catch { /* ignore */ }
     };
     fetch();
@@ -144,7 +157,7 @@ function RequestRideInner() {
           {pickup && (
             <div className="mt-3">
               <p className="text-xs text-text-muted mt-1.5 font-mono">Pickup: {pickup.lat.toFixed(4)}, {pickup.lng.toFixed(4)}</p>
-              <button className="inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none mt-2" onClick={() => setStep('dropoff')}>
+              <button className="inline-flex btn-primary items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none mt-2" onClick={() => setStep('dropoff')}>
                 Next: Set Drop-off
               </button>
             </div>
@@ -172,7 +185,7 @@ function RequestRideInner() {
               </div>
               <div className="flex gap-2 mt-4">
                 <button className="bg-transparent border-2 border-border text-text-muted hover:border-pink hover:text-pink inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm rounded-sm px-5 py-2.5 cursor-pointer transition flex-1" onClick={() => { setStep('pickup'); setDropoff(null); }}>Back</button>
-                <button className="inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none flex-1" onClick={() => setStep('selfie')}>
+                <button className="inline-flex btn-primary items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none flex-1" onClick={() => setStep('selfie')}>
                   Next: Selfie
                 </button>
               </div>
@@ -185,10 +198,10 @@ function RequestRideInner() {
         <div>
           <p className="text-sm text-text-muted mb-4">Capture a selfie to verify your identity. This is required before requesting a ride.</p>
           <SelfieCapture onCapture={handleSelfieCapture} />
-          {selfieDataUrl && <p className="text-success text-sm mt-2">Selfie captured</p>}
+          {selfieDataUrl && <p className="text-success  text-sm mt-2">Selfie captured</p>}
           <div className="flex gap-2 mt-4">
             <button className="bg-transparent border-2 border-border text-text-muted hover:border-pink hover:text-pink inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm rounded-sm px-5 py-2.5 cursor-pointer transition flex-1" onClick={() => setStep('dropoff')}>Back</button>
-            <button className="inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none flex-1" onClick={() => setStep('payment')} disabled={!selfieDataUrl}>
+            <button className="inline-flex btn-primary items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none flex-1" onClick={() => setStep('payment')} disabled={!selfieDataUrl}>
               Next: Payment
             </button>
           </div>
@@ -219,11 +232,10 @@ function RequestRideInner() {
           <h3 className="font-display text-base font-semibold m-0 mb-3">Payment Method</h3>
 
           <div
-            className={`flex-1 flex flex-col items-center gap-1 p-3 border-2 rounded-sm cursor-pointer transition text-sm mb-2 ${
-              paymentMethod === 'cash'
-                ? 'border-pink bg-pink-subtle text-pink font-semibold'
-                : 'border-border text-text bg-off-white hover:border-pink'
-            }`}
+            className={`flex-1 flex flex-col items-center gap-1 p-3 border-2 rounded-sm cursor-pointer transition text-sm mb-2 ${paymentMethod === 'cash'
+              ? 'border-pink bg-pink-subtle text-pink font-semibold'
+              : 'border-border text-text bg-off-white hover:border-pink'
+              }`}
             onClick={() => setPaymentMethod('cash')}
           >
             <div className="flex items-center gap-3 w-full">
@@ -237,26 +249,26 @@ function RequestRideInner() {
           </div>
 
           <div
-            className={`flex-1 flex flex-col items-center gap-1 p-3 border-2 rounded-sm cursor-pointer transition text-sm mb-2 ${
-              paymentMethod === 'stripe'
-                ? 'border-pink bg-pink-subtle text-pink font-semibold'
-                : 'border-border text-text bg-off-white hover:border-pink'
-            }`}
-            onClick={() => setPaymentMethod('stripe')}
+            className={`flex-1 flex flex-col items-center gap-1 p-3 border-2 rounded-sm transition text-sm mb-2 ${!stripeConfigured ? 'border-border bg-[#f9f9f9] text-text-light opacity-60 cursor-not-allowed' : paymentMethod === 'stripe'
+              ? 'border-pink bg-pink-subtle text-pink font-semibold cursor-pointer'
+              : 'border-border text-text bg-off-white hover:border-pink cursor-pointer'
+              }`}
+            onClick={() => stripeConfigured && setPaymentMethod('stripe')}
           >
             <div className="flex items-center gap-3 w-full">
               <span className="text-[1.3rem]">&#x1F4B3;</span>
               <div className="text-left flex-1">
-                <div className="font-semibold">Stripe / Card</div>
-                <div className="text-xs text-text-muted">Pay online with credit/debit card</div>
+                <div className="font-semibold">{!stripeConfigured ? 'Stripe / Card' : 'Stripe / Card'}</div>
+                <div className="text-xs text-text-muted">{!stripeConfigured ? 'Not configured — pay with cash instead' : 'Pay online with credit/debit card'}</div>
               </div>
               {paymentMethod === 'stripe' && <span className="text-pink font-bold text-sm">Selected</span>}
+              {!stripeConfigured && <span className="text-text-light font-bold text-[0.65rem] uppercase tracking-wider">Unavailable</span>}
             </div>
           </div>
 
           <div className="flex gap-2 mt-6">
             <button className="bg-transparent border-2 border-border text-text-muted hover:border-pink hover:text-pink inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm rounded-sm px-5 py-2.5 cursor-pointer transition flex-1" onClick={() => setStep('selfie')}>Back</button>
-            <button className="inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none flex-1" onClick={handleSubmit} disabled={loading || !pickup || !dropoff || !selfieDataUrl}>
+            <button className="inline-flex items-center btn-primary justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none flex-1" onClick={handleSubmit} disabled={loading || !pickup || !dropoff || !selfieDataUrl}>
               {loading ? 'Requesting...' : 'Request Ride'}
             </button>
           </div>

@@ -22,6 +22,14 @@ api.interceptors.response.use(
 
 export const authAPI = {
   register: (data) => api.post('/auth/register', data),
+  registerDocs: (formData) =>
+    api.post('/auth/register-docs', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  finalizeDriver: (formData) =>
+    api.post('/auth/finalize-driver', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
   login: (data) => api.post('/auth/login', data),
   getMe: () => api.get('/auth/me'),
   logout: () => api.post('/auth/logout'),
@@ -80,6 +88,7 @@ export const serviceAreaAPI = {
 };
 
 export const paymentsAPI = {
+  getConfig: () => api.get('/payments/config'),
   createCheckoutSession: (rideId) => api.post('/payments/create-checkout-session', { rideId }),
   getSessionStatus: (sessionId) => api.get('/payments/session-status', { params: { session_id: sessionId } }),
 };

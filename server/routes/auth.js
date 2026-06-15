@@ -1,6 +1,7 @@
 const express = require('express');
 const { body } = require('express-validator');
 const { authenticate } = require('../middleware/auth');
+const upload = require('../middleware/upload');
 const authController = require('../controllers/authController');
 
 const router = express.Router();
@@ -16,6 +17,16 @@ router.post(
     body('gender').equals('female').withMessage('Only female users can register.'),
   ],
   authController.register,
+);
+
+router.post(
+  '/finalize-driver',
+  upload.fields([
+    { name: 'license', maxCount: 1 },
+    { name: 'registration', maxCount: 1 },
+    { name: 'profile_photo', maxCount: 1 },
+  ]),
+  authController.finalizeDriver,
 );
 
 router.post(

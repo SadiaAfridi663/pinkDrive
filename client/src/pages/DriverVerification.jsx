@@ -109,16 +109,21 @@ function DriverVerification() {
           </div>
         ))}
 
-        <button type="submit" className="inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none px-8 py-3.5 text-base rounded w-full mt-6" disabled={uploading || Object.keys(files).length === 0}>
-          {uploading ? 'Uploading...' : 'Submit for Verification'}
-        </button>
+        {!uploading && (
+          <button type="submit" className="btn-primary inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none px-8 py-3.5 text-base rounded w-full mt-6" disabled={uploading || Object.keys(files).length === 0}>
+            {uploading ? 'Uploading...' : 'Submit for Verification'}
+          </button>
+        )}
       </form>
 
-      <p className="mt-5 text-sm text-text-muted text-center mt-5">
-        <button className="bg-none border-none text-pink cursor-pointer text-sm font-body font-medium p-0 underline hover:text-pink-dark" onClick={() => navigate('/driver/dashboard')}>
-          Check verification status
-        </button>
-      </p>
+      {uploading && (
+        <p className="mt-5 text-sm text-text-muted text-center mt-5">
+          <button className="bg-none border-none text-pink cursor-pointer text-sm font-body font-medium p-0 underline hover:text-pink-dark" onClick={() => navigate('/driver/dashboard')}>
+            Check verification status
+          </button>
+        </p>
+      )}
+
     </div>
   );
 }

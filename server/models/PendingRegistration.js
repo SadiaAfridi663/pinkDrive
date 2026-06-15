@@ -42,6 +42,11 @@ const PendingRegistration = sequelize.define('PendingRegistration', {
     type: DataTypes.STRING,
     allowNull: true,
   },
+  emailVerified: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    allowNull: false,
+  },
   verificationCode: {
     type: DataTypes.STRING,
     allowNull: false,
