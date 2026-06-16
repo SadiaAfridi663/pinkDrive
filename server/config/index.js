@@ -10,6 +10,10 @@ const connectDatabases = async () => {
   require('../models/ServiceArea');
   require('../models/SOSAlert');
   require('../models/EmergencyContact');
+  require('../models/Dispute');
+  require('../models/Debt');
+  require('../models/Wallet');
+  require('../models/Transaction');
   await connectSQL();
 };
 

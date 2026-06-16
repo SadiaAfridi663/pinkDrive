@@ -32,6 +32,7 @@ function AdminDashboard() {
     { label: 'Revenue', value: s?.totalRevenue ? `${s.totalRevenue} PKR` : '0 PKR', color: 'text-success', mono: true },
     { label: 'Pending Verifications', value: s?.pendingVerifications || 0, color: 'text-warning' },
     { label: 'Active SOS', value: s?.activeSOS || 0, color: 'text-error' },
+    { label: 'Open Disputes', value: s?.openDisputes || 0, color: 'text-error' },
   ];
 
   const quickLinks = [
@@ -40,6 +41,8 @@ function AdminDashboard() {
     { to: '/admin/geo-fence', label: 'Geo-Fence', desc: 'Manage service areas' },
     { to: '/admin/users', label: 'Users', desc: 'Manage all users' },
     { to: '/admin/rides', label: 'Rides', desc: 'Monitor all rides' },
+    { to: '/admin/payments', label: 'Payments', desc: 'Revenue & payment tracking' },
+    { to: '/admin/disputes', label: 'Disputes', desc: `${s?.openDisputes || 0} open` },
     { to: '/admin/activity', label: 'Activity', desc: 'System activity log' },
   ];
 

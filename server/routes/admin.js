@@ -7,10 +7,18 @@ router.use(authenticate);
 router.use(authorize('admin'));
 
 router.get('/stats', adminController.getStats);
+router.get('/payments', adminController.getPaymentStats);
 router.get('/users', adminController.getUsers);
+router.get('/users/:id', adminController.getUserById);
 router.patch('/users/:id/suspend', adminController.suspendUser);
+router.patch('/users/:id/restriction', adminController.updateUserRestriction);
 router.get('/rides', adminController.getAllRides);
 router.get('/rides/:id', adminController.getRideById);
+router.patch('/rides/:id/payment-status', adminController.overridePaymentStatus);
 router.get('/activities', adminController.getActivities);
+router.get('/disputes', adminController.getDisputes);
+router.get('/disputes/:id', adminController.getDisputeById);
+router.patch('/disputes/:id/resolve', adminController.resolveDispute);
+router.post('/debts/:id/clear', adminController.clearDebt);
 
 module.exports = router;

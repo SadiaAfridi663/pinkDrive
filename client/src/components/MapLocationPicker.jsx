@@ -151,13 +151,13 @@ function MapLocationPicker({ onSelect, label, initialPosition, otherMarker, user
       if (!area.coordinates || area.coordinates.length < 3) continue;
       const coords = area.coordinates.map(([lat, lng]) => [lat, lng]);
       const poly = L.polygon(coords, {
+        interactive: false,
         color: area.color || '#e91e8c',
         weight: 2,
         opacity: 0.8,
         fillColor: area.color || '#e91e8c',
         fillOpacity: 0.12,
       }).addTo(map);
-      poly.bindPopup(`<strong>${area.name}</strong>`);
       polygonLayersRef.current.push(poly);
     }
   }, [serviceAreas]);

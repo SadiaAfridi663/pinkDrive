@@ -46,7 +46,7 @@ const Ride = sequelize.define('Ride', {
     defaultValue: 'pending',
     allowNull: false,
     validate: {
-      isIn: [['pending', 'accepted', 'arrived', 'in_progress', 'completed', 'cancelled']],
+      isIn: [['pending', 'accepted', 'arrived', 'in_progress', 'completed', 'cancelled', 'awaiting_payment', 'payment_dispute']],
     },
   },
   selfiePath: {
@@ -62,7 +62,7 @@ const Ride = sequelize.define('Ride', {
     defaultValue: 'cash',
     allowNull: false,
     validate: {
-      isIn: [['cash', 'stripe', 'card']],
+      isIn: [['cash', 'stripe', 'card', 'easypaisa', 'jazzcash', 'wallet']],
     },
   },
   paymentStatus: {

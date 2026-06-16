@@ -3,7 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { adminAPI } from '../services/api';
 import Avatar from '../components/Avatar';
 
-const STATUS_COLORS = {
+  const PAYMENT_STATUS_COLORS = {
+    paid: 'bg-[#e8f5e9] text-success',
+    pending: 'bg-[#fff8e1] text-warning',
+    failed: 'bg-[#ffebee] text-error',
+    refunded: 'bg-[#f3e5f5] text-[#7b1fa2]',
+  };
+
+  const STATUS_COLORS = {
   pending: 'bg-[#fff8e1] text-warning',
   accepted: 'bg-[#e3f2fd] text-[#1565c0]',
   arrived: 'bg-[#e3f2fd] text-[#1565c0]',
@@ -89,6 +96,8 @@ function AdminRides() {
                 <th className="text-left px-4 py-3 font-semibold">Pickup</th>
                 <th className="text-left px-4 py-3 font-semibold">Dropoff</th>
                 <th className="text-left px-4 py-3 font-semibold">Fare</th>
+                <th className="text-left px-4 py-3 font-semibold">Payment</th>
+                <th className="text-left px-4 py-3 font-semibold">Payment Status</th>
                 <th className="text-left px-4 py-3 font-semibold">Status</th>
                 <th className="text-left px-4 py-3 font-semibold">Date</th>
               </tr>
@@ -115,6 +124,10 @@ function AdminRides() {
                   <td className="px-4 py-3 text-stone max-w-[140px] truncate">{r.pickupAddress || `${r.pickupLat?.toFixed(4)}, ${r.pickupLng?.toFixed(4)}`}</td>
                   <td className="px-4 py-3 text-stone max-w-[140px] truncate">{r.dropoffAddress || `${r.dropoffLat?.toFixed(4)}, ${r.dropoffLng?.toFixed(4)}`}</td>
                   <td className="px-4 py-3 font-mono">{r.fare ? `${r.fare} PKR` : 'N/A'}</td>
+                  <td className="px-4 py-3 capitalize text-navy">{r.paymentMethod || 'N/A'}</td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-block text-xs font-semibold px-2 py-1 rounded ${PAYMENT_STATUS_COLORS[r.paymentStatus] || ''}`}>{r.paymentStatus || 'N/A'}</span>
+                  </td>
                   <td className="px-4 py-3">
                     <span className={`inline-block text-xs font-semibold px-2 py-1 rounded ${STATUS_COLORS[r.status] || ''}`}>{r.status}</span>
                   </td>

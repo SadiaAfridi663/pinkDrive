@@ -55,6 +55,21 @@ const User = sequelize.define('User', {
     type: DataTypes.BOOLEAN,
     defaultValue: false,
   },
+  outstandingDebt: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0,
+  },
+  warningCount: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+  },
+  restriction: {
+    type: DataTypes.STRING,
+    defaultValue: 'none',
+    validate: {
+      isIn: [['none', 'warning', 'suspended', 'banned']],
+    },
+  },
   isDriverVerified: {
     type: DataTypes.BOOLEAN,
     defaultValue: false,

@@ -321,3 +321,7 @@
     to { width: 0%; }
   }
 }
+
+.leaflet-pane { z-index: 1 !important; }
+.leaflet-top, .leaflet-bottom { z-index: 2 !important; }
+.leaflet-control { z-index: 2 !important; }

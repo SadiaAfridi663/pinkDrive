@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { paymentsAPI } from '../services/api';
+import { paymentsAPI, rideAPI } from '../services/api';
 
 function PaymentCheckout() {
   const [searchParams] = useSearchParams();
@@ -17,6 +17,7 @@ function PaymentCheckout() {
     }
 
     let cancelled = false;
+    let retries = 0;
     const check = async () => {
       try {
         const res = await paymentsAPI.getSessionStatus(sessionId);
@@ -24,20 +25,28 @@ function PaymentCheckout() {
           setSessionStatus(res.data.data);
           if (res.data.data.status === 'complete' && res.data.data.paymentStatus === 'paid') {
             setStatus('success');
+            return;
           }
         }
       } catch {
-        if (!cancelled) setStatus('error');
+        if (!cancelled && retries >= 3) setStatus('error');
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          retries++;
+          if (retries < 15) {
+            setTimeout(check, 2000);
+          } else {
+            setLoading(false);
+          }
+        }
       }
     };
 
-    const timer = setTimeout(check, 1500);
+    const timer = setTimeout(check, 1000);
     return () => { cancelled = true; clearTimeout(timer); };
   }, [sessionId]);
 
-  if (loading) {
+  if (loading && status !== 'success') {
     return (
       <div className="page">
         <div className="page-header"><h1>Payment</h1></div>

@@ -1,10 +1,11 @@
 import { useState, useEffect, useContext, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { rideAPI, sosAPI } from '../services/api';
+import { rideAPI, sosAPI, paymentsAPI } from '../services/api';
 import { AuthContext } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import RideRouteMap from '../components/RideRouteMap';
 import useGeolocation from '../hooks/useGeolocation';
+import { ToastContext } from '../context/ToastContext';
 
 const API_URL = import.meta.env.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace('/api', '')
@@ -20,6 +21,7 @@ function ActiveRide() {
   const { socket } = useSocket();
   const { position, isGranted, startWatching, request } = useGeolocation();
   const navigate = useNavigate();
+  const toast = useContext(ToastContext);
   const watchStartedRef = useRef(false);
 
   const fetchRide = useCallback(async () => {
@@ -70,6 +72,21 @@ function ActiveRide() {
     finally { setSosSending(false); }
   };
 
+  const [paying, setPaying] = useState(false);
+
+  const handlePay = async () => {
+    if (!ride || paying) return;
+    setPaying(true);
+    try {
+      const res = await paymentsAPI.createCheckoutSession(ride.id);
+      window.location.href = res.data.data.url;
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to initiate payment.');
+    } finally {
+      setPaying(false);
+    }
+  };
+
   const handleCancel = async () => {
     if (!ride) return;
     try { await rideAPI.cancelRide(ride.id); navigate('/passenger'); }
@@ -77,7 +94,7 @@ function ActiveRide() {
   };
 
   const badgeClass = (status) => {
-    const colors = { approved: 'badge-success', rejected: 'badge-error', pending: 'badge-warning', accepted: 'badge-info', arrived: 'badge-info', in_progress: 'badge-info', completed: 'badge-success', cancelled: 'badge-neutral' };
+    const colors = { approved: 'badge-success', rejected: 'badge-error', pending: 'badge-warning', accepted: 'badge-info', arrived: 'badge-info', in_progress: 'badge-info', completed: 'badge-success', cancelled: 'badge-neutral', awaiting_payment: 'bg-[#fff8e1] text-[#f57f17]', payment_dispute: 'badge-error' };
     return `badge ${colors[status] || 'badge-warning'}`;
   };
 
@@ -107,6 +124,8 @@ function ActiveRide() {
     in_progress: 'Ride in progress...',
     completed: 'Ride completed!',
     cancelled: 'Ride cancelled.',
+    awaiting_payment: 'Ride completed. Payment pending.',
+    payment_dispute: 'Payment dispute reported. Admin is reviewing.',
   };
 
   return (
@@ -150,7 +169,7 @@ function ActiveRide() {
           </div>
           {ride.distance && <div className="flex justify-between items-center text-sm"><span className="text-stone">Distance</span><span className="font-medium text-navy font-mono">{ride.distance} km</span></div>}
           {ride.fare > 0 && <div className="flex justify-between items-center text-sm"><span className="text-stone">Fare</span><span className="font-medium text-navy font-mono font-bold">{ride.fare} PKR</span></div>}
-          {ride.paymentMethod && <div className="flex justify-between items-center text-sm"><span className="text-stone">Payment</span><span className="font-medium text-navy font-mono capitalize">{ride.paymentMethod}{ride.paymentMethod === 'cash' && ride.status === 'completed' ? ' (due)' : ''}</span></div>}
+          {ride.paymentMethod && <div className="flex justify-between items-center text-sm"><span className="text-stone">Payment</span><span className="font-medium text-navy font-mono capitalize">{ride.paymentMethod}{ride.paymentMethod === 'cash' && ride.status === 'awaiting_payment' ? ' (due)' : ride.paymentStatus === 'paid' ? ' (paid)' : ''}</span></div>}
           {ride.status !== 'pending' && driver && <div className="flex justify-between items-center text-sm"><span className="text-stone">Driver</span><span className="font-medium text-navy font-mono">{driver.name}</span></div>}
         </div>
 
@@ -160,6 +179,59 @@ function ActiveRide() {
               {sosSent ? 'SOS Sent' : sosSending ? 'Sending...' : 'SOS Emergency'}
             </button>
             {sosSent && <p className="text-xs text-success text-center mt-1">Help is on the way. Admin has been notified.</p>}
+          </div>
+        )}
+
+        {ride.status === 'awaiting_payment' && ride.paymentMethod === 'cash' && user?.role === 'passenger' && (
+          <div className="mt-4 pt-4 border-t border-border flex flex-col gap-2">
+            <p className="text-sm text-stone text-center m-0">Did you pay the driver?</p>
+            <button className="btn btn-primary w-full" onClick={async () => {
+              try {
+                await rideAPI.acknowledgePayment(ride.id);
+                toast?.showToast?.('Payment acknowledged. Ride completed.', 'success');
+                fetchRide();
+              } catch (err) {
+                setError(err.response?.data?.message || 'Failed to acknowledge.');
+              }
+            }}>
+              Yes, I Paid
+            </button>
+            <button className="btn btn-danger w-full" onClick={async () => {
+              try {
+                await rideAPI.reportIssue(ride.id, { disputeType: 'driver_false_claim', description: 'Driver claiming non-payment is incorrect.' });
+                toast?.showToast?.('Issue reported. Admin will review.', 'success');
+                fetchRide();
+              } catch (err) {
+                setError(err.response?.data?.message || 'Failed to report issue.');
+              }
+            }}>
+              Report Issue — Driver Claims I Didn't Pay
+            </button>
+          </div>
+        )}
+
+        {ride.status === 'awaiting_payment' && ride.paymentMethod === 'stripe' && user?.role === 'passenger' && (
+          <div className="mt-4 pt-4 border-t border-border">
+            <button className="btn btn-primary btn-full" onClick={handlePay} disabled={paying}>
+              {paying ? 'Processing...' : `Pay ${ride.fare} PKR via Card`}
+            </button>
+          </div>
+        )}
+
+        {ride.status === 'awaiting_payment' && user?.role === 'passenger' && (
+          <div className="mt-4 pt-4 border-t border-border">
+            <button className="btn btn-danger w-full" onClick={async () => {
+              try {
+                const type = window.prompt('Issue type: passenger_refused_payment, partial_payment, driver_extra_fare') || 'driver_extra_fare';
+                await rideAPI.reportIssue(ride.id, { disputeType: type, description: window.prompt('Describe the issue:') || '' });
+                toast?.showToast?.('Issue reported. Admin will review.', 'success');
+                fetchRide();
+              } catch (err) {
+                setError(err.response?.data?.message || 'Failed to report issue.');
+              }
+            }}>
+              Report Issue
+            </button>
           </div>
         )}
 

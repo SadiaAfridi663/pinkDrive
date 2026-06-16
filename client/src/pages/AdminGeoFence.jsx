@@ -94,7 +94,6 @@ function AdminGeoFence() {
 
   const startAdd = () => {
     setAdding(true);
-    setEditingId(null);
     setNewName('');
     setNewColor('#e91e8c');
     setVertices([]);

@@ -47,15 +47,23 @@ export const driverAPI = {
 };
 
 export const adminAPI = {
+  getUserById: (id) => api.get(`/admin/users/${id}`),
   getPendingVerifications: () => api.get('/driver-verification/pending'),
   reviewVerification: (userId, action, adminNote) =>
     api.patch(`/driver-verification/review/${userId}`, { action, adminNote }),
   getStats: () => api.get('/admin/stats'),
   getUsers: (params) => api.get('/admin/users', { params }),
   suspendUser: (id) => api.patch(`/admin/users/${id}/suspend`),
+  updateUserRestriction: (id, restriction) => api.patch(`/admin/users/${id}/restriction`, { restriction }),
   getAllRides: (params) => api.get('/admin/rides', { params }),
   getRideById: (id) => api.get(`/admin/rides/${id}`),
+  overridePaymentStatus: (id, paymentStatus) => api.patch(`/admin/rides/${id}/payment-status`, { paymentStatus }),
   getActivities: (params) => api.get('/admin/activities', { params }),
+  getPaymentStats: () => api.get('/admin/payments'),
+  getDisputes: (params) => api.get('/admin/disputes', { params }),
+  getDisputeById: (id) => api.get(`/admin/disputes/${id}`),
+  resolveDispute: (id, data) => api.patch(`/admin/disputes/${id}/resolve`, data),
+  clearDebt: (id) => api.post(`/admin/debts/${id}/clear`),
 };
 
 export const rideAPI = {
@@ -77,6 +85,9 @@ export const rideAPI = {
   getRideById: (rideId) => api.get(`/rides/${rideId}`),
   updateDriverLocation: (rideId, lat, lng) => api.patch(`/rides/${rideId}/driver-location`, { lat, lng }),
   getNearbyDrivers: (lat, lng, radius) => api.get('/rides/nearby-drivers', { params: { lat, lng, radius } }),
+  confirmPayment: (rideId) => api.post(`/rides/${rideId}/confirm-payment`),
+  acknowledgePayment: (rideId) => api.post(`/rides/${rideId}/acknowledge-payment`),
+  reportIssue: (rideId, data) => api.post(`/rides/${rideId}/report-issue`, data),
 };
 
 export const serviceAreaAPI = {
@@ -91,6 +102,14 @@ export const paymentsAPI = {
   getConfig: () => api.get('/payments/config'),
   createCheckoutSession: (rideId) => api.post('/payments/create-checkout-session', { rideId }),
   getSessionStatus: (sessionId) => api.get('/payments/session-status', { params: { session_id: sessionId } }),
+};
+
+export const walletAPI = {
+  getWallet: () => api.get('/wallet'),
+  topup: (amount) => api.post('/wallet/topup', { amount }),
+  confirmTopup: (sessionId) => api.post('/wallet/confirm-topup', { session_id: sessionId }),
+  getTransactions: (params) => api.get('/wallet/transactions', { params }),
+  getDriverEarnings: (params) => api.get('/wallet/driver-earnings', { params }),
 };
 
 export const sosAPI = {

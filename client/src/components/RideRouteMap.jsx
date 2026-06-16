@@ -115,7 +115,6 @@ function RideRouteMap({ pickup, dropoff, driverLocation, passengerLocation, near
       zoom: 13,
       zoomControl: true,
     });
-
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors',
     }).addTo(map);

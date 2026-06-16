@@ -78,6 +78,9 @@ async function start() {
 
   app.use('/api/payments', paymentRoutes);
 
+  const walletRoutes = require('./routes/wallet');
+  app.use('/api/wallet', walletRoutes);
+
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
   app.use(errorMiddleware);
 

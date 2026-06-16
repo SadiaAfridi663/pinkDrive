@@ -63,8 +63,8 @@ function isPointInPolygon(lat, lng, polygon) {
   for (let i = 0, j = n - 1; i < n; j = i++) {
     const [latI, lngI] = polygon[i];
     const [latJ, lngJ] = polygon[j];
-    if ((lngI > lng) !== (lngJ > lng) &&
-        lat < ((latJ - latI) * (lng - lngI)) / (lngJ - lngI) + latI) {
+    if ((latI > lat) !== (latJ > lat) &&
+        lng < ((lngJ - lngI) * (lat - latI)) / (latJ - latI) + lngI) {
       inside = !inside;
     }
   }

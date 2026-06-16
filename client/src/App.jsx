@@ -19,12 +19,16 @@ import AdminUsers from './pages/AdminUsers';
 import AdminRides from './pages/AdminRides';
 import AdminRideDetail from './pages/AdminRideDetail';
 import AdminActivity from './pages/AdminActivity';
+import AdminPayments from './pages/AdminPayments';
+import AdminDisputes from './pages/AdminDisputes';
 import EmergencyContacts from './pages/EmergencyContacts';
 import PassengerDashboard from './pages/PassengerDashboard';
 import RequestRide from './pages/RequestRide';
 import ActiveRide from './pages/ActiveRide';
 import RideDetail from './pages/RideDetail';
 import PaymentCheckout from './pages/PaymentCheckout';
+import WalletPage from './pages/WalletPage';
+import DriverEarnings from './pages/DriverEarnings';
 
 function Home() {
   const { user } = useContext(AuthContext);
@@ -53,6 +57,8 @@ function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/driver/verification" element={<Layout roles={['driver']}><DriverVerification /></Layout>} />
+          <Route path="/wallet" element={<Layout roles={['passenger', 'driver']}><WalletPage /></Layout>} />
+          <Route path="/wallet/earnings" element={<Layout roles={['driver']}><DriverEarnings /></Layout>} />
           <Route path="/driver/dashboard" element={<Layout roles={['driver']}><DriverDashboard /></Layout>} />
           <Route path="/driver/rides" element={<Layout roles={['driver']}><DriverRides /></Layout>} />
           <Route path="/admin" element={<Layout roles={['admin']}><AdminDashboard /></Layout>} />
@@ -63,6 +69,8 @@ function App() {
           <Route path="/admin/rides" element={<Layout roles={['admin']}><AdminRides /></Layout>} />
           <Route path="/admin/rides/:id" element={<Layout roles={['admin']}><AdminRideDetail /></Layout>} />
           <Route path="/admin/activity" element={<Layout roles={['admin']}><AdminActivity /></Layout>} />
+          <Route path="/admin/payments" element={<Layout roles={['admin']}><AdminPayments /></Layout>} />
+          <Route path="/admin/disputes" element={<Layout roles={['admin']}><AdminDisputes /></Layout>} />
           <Route path="/emergency-contacts" element={<Layout roles={['passenger']}><EmergencyContacts /></Layout>} />
           <Route path="/passenger" element={<Layout roles={['passenger']}><PassengerDashboard /></Layout>} />
           <Route path="/ride/request" element={<Layout roles={['passenger']}><RequestRide /></Layout>} />

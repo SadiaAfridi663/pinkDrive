@@ -20,6 +20,7 @@ function DriverRidesInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [confirmComplete, setConfirmComplete] = useState(false);
   const navigate = useNavigate();
   const { socket } = useSocket();
   const watchIdRef = useRef(null);
@@ -197,6 +198,8 @@ function DriverRidesInner() {
       in_progress: 'bg-[#f3e5f5] text-[#7b1fa2]',
       completed: 'badge-success',
       cancelled: 'badge-neutral',
+      awaiting_payment: 'bg-[#fff8e1] text-[#f57f17]',
+      payment_dispute: 'badge-error',
     };
     return `${base} ${colors[status] || colors.pending}`;
   };
@@ -312,9 +315,72 @@ function DriverRidesInner() {
                 </button>
               )}
               {activeRide.status === 'in_progress' && (
-                <button className="btn btn-primary flex-1" onClick={() => handleStatus(activeRide.id, 'completed')}>
+                <button className="btn btn-primary flex-1" onClick={() => setConfirmComplete(true)}>
                   Complete Ride
                 </button>
+              )}
+
+              {confirmComplete && (
+                <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40" onClick={() => setConfirmComplete(false)}>
+                  <div className="bg-white rounded-sm p-6 max-w-sm w-full mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+                    <h4 className="font-display text-base font-semibold text-navy m-0 mb-2">Complete Ride?</h4>
+                    <div className="flex flex-col gap-1.5 mb-4 text-sm">
+                      <div className="flex justify-between"><span className="text-stone">Fare</span><span className="font-semibold text-navy">{activeRide.fare} PKR</span></div>
+                      <div className="flex justify-between"><span className="text-stone capitalize">Payment</span><span className="font-semibold text-navy capitalize">{activeRide.paymentMethod}</span></div>
+                      <div className="flex justify-between"><span className="text-stone">Distance</span><span className="font-semibold text-navy">{activeRide.distance} km</span></div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button className="btn btn-secondary flex-1" onClick={() => setConfirmComplete(false)}>Cancel</button>
+                      <button className="btn btn-primary flex-1" onClick={() => { setConfirmComplete(false); handleStatus(activeRide.id, 'completed'); }}>
+                        Yes, Complete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {activeRide.status === 'awaiting_payment' && activeRide.paymentMethod === 'cash' && (
+                <div className="w-full flex flex-col gap-2">
+                  <p className="m-0 text-sm text-stone text-center">Did the passenger pay?</p>
+                  <button className="btn btn-primary w-full" onClick={async () => {
+                    try {
+                      await rideAPI.confirmPayment(activeRide.id);
+                      setMessage('Payment confirmed. Ride completed.');
+                      fetchData();
+                    } catch (err) {
+                      setError(err.response?.data?.message || 'Failed to confirm payment.');
+                    }
+                  }}>
+                    Yes — Payment Received
+                  </button>
+                  <button className="btn btn-danger w-full" onClick={async () => {
+                    try {
+                      await rideAPI.reportIssue(activeRide.id, { disputeType: 'passenger_refused_payment', description: 'Passenger did not pay after ride completion.' });
+                      setMessage('Issue reported. Admin will review.');
+                      fetchData();
+                    } catch (err) {
+                      setError(err.response?.data?.message || 'Failed to report issue.');
+                    }
+                  }}>
+                    Report Issue — Not Paid
+                  </button>
+                </div>
+              )}
+
+              {activeRide.status === 'awaiting_payment' && activeRide.paymentMethod === 'stripe' && (
+                <div className="w-full flex flex-col gap-2">
+                  <p className="m-0 text-sm text-stone text-center">Waiting for passenger to pay via card.</p>
+                  <button className="btn btn-danger w-full" onClick={async () => {
+                    try {
+                      await rideAPI.reportIssue(activeRide.id, { disputeType: 'passenger_refused_payment', description: 'Passenger did not complete Stripe payment.' });
+                      setMessage('Issue reported. Admin will review.');
+                      fetchData();
+                    } catch (err) {
+                      setError(err.response?.data?.message || 'Failed to report issue.');
+                    }
+                  }}>
+                    Report Issue — Not Paid
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -334,11 +400,33 @@ function DriverRidesInner() {
           <div className="flex flex-col gap-3">
             {pendingRides.map((ride) => (
               <div key={ride.id} className="card p-5">
-                <div className="flex flex-col gap-2 mb-4">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-stone">Passenger</span>
-                    <span className="font-medium text-navy font-mono">{ride.passenger?.name || 'Unknown'}</span>
+                <div className="flex items-center gap-3 mb-3 p-2.5 bg-ivory rounded-sm">
+                  {ride.selfiePath ? (
+                    <img
+                      src={`${API_URL}/${ride.selfiePath.replace(/\\/g, '/')}`}
+                      alt={ride.passenger?.name}
+                      className="w-11 h-11 rounded-full object-cover border-2 border-border"
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                    />
+                  ) : (
+                    <div className="w-11 h-11 rounded-full bg-coral-light flex items-center justify-center text-base text-coral">
+                      {ride.passenger?.name?.[0] || 'P'}
+                    </div>
+                  )}
+                  <div>
+                    <p className="m-0 font-semibold text-navy text-[0.95rem]">{ride.passenger?.name || 'Passenger'}</p>
                   </div>
+                </div>
+
+                <div className="mb-3 rounded-sm overflow-hidden border-2 border-border">
+                  <RideRouteMap
+                    pickup={{ lat: ride.pickupLat, lng: ride.pickupLng }}
+                    dropoff={{ lat: ride.dropoffLat, lng: ride.dropoffLng }}
+                    height="150px"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-2 mb-4">
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-stone">Pickup</span>
                     <span className="font-medium text-navy font-mono">{ride.pickupAddress || `${ride.pickupLat?.toFixed(4)}, ${ride.pickupLng?.toFixed(4)}`}</span>
@@ -356,7 +444,7 @@ function DriverRidesInner() {
                     <span className="font-medium text-navy font-mono font-bold">{ride.fare ? `${ride.fare} PKR` : 'N/A'}</span>
                   </div>
                 </div>
-                <button className="btn btn-primary w-full mt-2" onClick={() => handleAccept(ride.id)}>
+                <button className="btn btn-primary w-full" onClick={() => handleAccept(ride.id)}>
                   Accept Ride
                 </button>
               </div>

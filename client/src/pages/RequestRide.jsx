@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { rideAPI, serviceAreaAPI, paymentsAPI } from '../services/api';
+import { rideAPI, serviceAreaAPI, paymentsAPI, walletAPI } from '../services/api';
 import MapLocationPicker from '../components/MapLocationPicker';
 import RideRouteMap from '../components/RideRouteMap';
 import SelfieCapture from '../components/SelfieCapture';
@@ -18,6 +18,7 @@ function RequestRideInner() {
   const [nearbyDrivers, setNearbyDrivers] = useState([]);
   const [serviceAreas, setServiceAreas] = useState([]);
   const [stripeConfigured, setStripeConfigured] = useState(true);
+  const [walletBalance, setWalletBalance] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -41,6 +42,18 @@ function RequestRideInner() {
       try {
         const res = await paymentsAPI.getConfig();
         if (!cancelled) setStripeConfigured(res.data.data.stripeConfigured);
+      } catch { /* ignore */ }
+    };
+    fetch();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetch = async () => {
+      try {
+        const res = await walletAPI.getWallet();
+        if (!cancelled) setWalletBalance(parseFloat(res.data.data.wallet.balance));
       } catch { /* ignore */ }
     };
     fetch();
@@ -94,12 +107,7 @@ function RequestRideInner() {
         paymentMethod,
       });
 
-      const checkoutUrl = rideRes.data.data.checkoutUrl;
-      if (checkoutUrl) {
-        window.location.href = checkoutUrl;
-      } else {
-        navigate('/ride/active');
-      }
+      navigate('/ride/active');
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to create ride.');
     } finally {
@@ -263,6 +271,34 @@ function RequestRideInner() {
               </div>
               {paymentMethod === 'stripe' && <span className="text-pink font-bold text-sm">Selected</span>}
               {!stripeConfigured && <span className="text-text-light font-bold text-[0.65rem] uppercase tracking-wider">Unavailable</span>}
+            </div>
+          </div>
+
+          <div
+            className={`flex-1 flex flex-col items-center gap-1 p-3 border-2 rounded-sm text-sm mb-2 ${fare && walletBalance !== null && walletBalance < fare
+                ? 'border-border bg-[#f9f9f9] text-text-light opacity-60 cursor-not-allowed'
+                : paymentMethod === 'wallet'
+                  ? 'border-pink bg-pink-subtle text-pink font-semibold cursor-pointer'
+                  : 'border-border text-text bg-off-white hover:border-pink cursor-pointer'
+              }`}
+            onClick={() => {
+              if (!(fare && walletBalance !== null && walletBalance < fare)) {
+                setPaymentMethod('wallet');
+              }
+            }}
+          >
+            <div className="flex items-center gap-3 w-full">
+              <span className="text-[1.3rem]">&#x1F4B0;</span>
+              <div className="text-left flex-1">
+                <div className="font-semibold">Wallet</div>
+                <div className="text-xs text-text-muted">
+                  {walletBalance !== null
+                    ? `Balance: ${walletBalance.toLocaleString()} PKR${fare && walletBalance < fare ? ' — insufficient, top up in Wallet' : ''}`
+                    : 'Pay from your PinkDrive wallet'}
+                </div>
+              </div>
+              {paymentMethod === 'wallet' && !(fare && walletBalance !== null && walletBalance < fare) && <span className="text-pink font-bold text-sm">Selected</span>}
+              {fare && walletBalance !== null && walletBalance < fare && <span className="text-text-light font-bold text-[0.65rem] uppercase tracking-wider">Insufficient</span>}
             </div>
           </div>
 

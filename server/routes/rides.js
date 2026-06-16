@@ -9,6 +9,9 @@ const {
   getPendingRides,
   acceptRide,
   updateRideStatus,
+  confirmPayment,
+  acknowledgePayment,
+  reportIssue,
   cancelRide,
   getRideHistory,
   getRideById,
@@ -29,7 +32,7 @@ router.post(
     body('pickupLng').isFloat().withMessage('Pickup longitude required.'),
     body('dropoffLat').isFloat().withMessage('Drop-off latitude required.'),
     body('dropoffLng').isFloat().withMessage('Drop-off longitude required.'),
-    body('paymentMethod').optional().isIn(['cash', 'stripe', 'card']).withMessage('Payment method must be cash, stripe, or card.'),
+    body('paymentMethod').optional().isIn(['cash', 'stripe', 'card', 'easypaisa', 'jazzcash']).withMessage('Payment method must be cash, stripe, card, easypaisa, or jazzcash.'),
   ],
   createRide,
 );
@@ -62,6 +65,10 @@ router.patch(
 );
 
 router.patch('/:id/cancel', authorize('passenger'), cancelRide);
+
+router.post('/:id/confirm-payment', authorize('driver'), confirmPayment);
+router.post('/:id/acknowledge-payment', authorize('passenger'), acknowledgePayment);
+router.post('/:id/report-issue', reportIssue);
 
 router.get('/history', getRideHistory);
 

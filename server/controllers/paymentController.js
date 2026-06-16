@@ -4,6 +4,33 @@ const User = require('../models/User');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/AppError');
 const logger = require('../utils/logger');
+const { getIO } = require('../sockets');
+const { sendRideReceiptToPassenger, sendDriverRideCompleted } = require('../services/receiptService');
+
+async function confirmRidePayment(rideId, stripeSessionId) {
+  const ride = await Ride.findByPk(rideId);
+  if (!ride || ride.paymentStatus === 'paid') return ride;
+
+  ride.paymentStatus = 'paid';
+  if (ride.status === 'awaiting_payment') {
+    ride.status = 'completed';
+    ride.completedAt = new Date();
+  }
+  if (stripeSessionId) ride.stripeSessionId = stripeSessionId;
+  await ride.save();
+
+  logger.info(`Payment confirmed for ride ${rideId}`);
+
+  const io = getIO();
+  if (io) {
+    io.to(`ride:${rideId}`).emit('ride:status', { rideId, status: ride.status });
+  }
+
+  sendRideReceiptToPassenger(rideId);
+  sendDriverRideCompleted(rideId);
+
+  return ride;
+}
 
 exports.createCheckoutSession = catchAsync(async (req, res, next) => {
   const { rideId } = req.body;
@@ -71,6 +98,13 @@ exports.getSessionStatus = catchAsync(async (req, res, next) => {
   try {
     const session = await stripe.checkout.sessions.retrieve(session_id);
 
+    if (session.status === 'complete' && session.payment_status === 'paid') {
+      const rideId = session.client_reference_id;
+      if (rideId) {
+        await confirmRidePayment(rideId, session.id);
+      }
+    }
+
     res.status(200).json({
       success: true,
       data: {
@@ -115,12 +149,8 @@ exports.handleWebhook = async (req, res) => {
 
     if (rideId) {
       try {
-        const ride = await Ride.findByPk(rideId);
-        if (ride && ride.paymentStatus !== 'paid') {
-          ride.paymentStatus = 'paid';
-          await ride.save();
-          logger.info(`Payment completed for ride ${rideId}, stripe session ${session.id}`);
-        }
+        await confirmRidePayment(rideId, session.id);
+        logger.info(`Webhook: payment completed for ride ${rideId}, stripe session ${session.id}`);
       } catch (err) {
         logger.error(`Webhook: failed to update ride ${rideId}:`, err.message);
       }
