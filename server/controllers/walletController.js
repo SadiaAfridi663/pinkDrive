@@ -1,5 +1,7 @@
+const { Op } = require('sequelize');
 const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
+const WithdrawalRequest = require('../models/WithdrawalRequest');
 const Ride = require('../models/Ride');
 const AppError = require('../utils/AppError');
 const catchAsync = require('../utils/catchAsync');
@@ -123,5 +125,77 @@ exports.getDriverEarnings = catchAsync(async (req, res) => {
   res.status(200).json({
     success: true,
     data: { transactions: rows, total: parseFloat(totalEarnings), pages: Math.ceil(count / limit), currentPage: parseInt(page) },
+  });
+});
+
+exports.getWithdrawableBalance = catchAsync(async (req, res) => {
+  const totalEarnings = await Transaction.sum('amount', {
+    where: { userId: req.user.id, type: 'ride_earnings', direction: 'credit' },
+  }) || 0;
+
+  const pendingWithdrawals = await WithdrawalRequest.sum('amount', {
+    where: { userId: req.user.id, status: 'pending' },
+  }) || 0;
+
+  const withdrawable = Math.max(0, parseFloat(totalEarnings) - parseFloat(pendingWithdrawals));
+
+  res.status(200).json({
+    success: true,
+    data: { totalEarnings: parseFloat(totalEarnings), pendingWithdrawals: parseFloat(pendingWithdrawals), withdrawable },
+  });
+});
+
+exports.requestWithdrawal = catchAsync(async (req, res, next) => {
+  const { amount, method, accountDetails } = req.body;
+  if (!amount || amount <= 0) return next(new AppError('Valid amount is required.', 400));
+  if (!['bank', 'jazzcash', 'easypaisa'].includes(method)) {
+    return next(new AppError('Method must be bank, jazzcash, or easypaisa.', 400));
+  }
+  if (!accountDetails) return next(new AppError('Account details are required.', 400));
+
+  const totalEarnings = await Transaction.sum('amount', {
+    where: { userId: req.user.id, type: 'ride_earnings', direction: 'credit' },
+  }) || 0;
+
+  const pendingWithdrawals = await WithdrawalRequest.sum('amount', {
+    where: { userId: req.user.id, status: 'pending' },
+  }) || 0;
+
+  const withdrawable = parseFloat(totalEarnings) - parseFloat(pendingWithdrawals);
+  if (parseFloat(amount) > withdrawable) {
+    return next(new AppError(`Insufficient withdrawable balance. Available: ${withdrawable.toFixed(2)}`, 400));
+  }
+
+  const withdrawal = await WithdrawalRequest.create({
+    userId: req.user.id,
+    amount,
+    method,
+    accountDetails,
+    status: 'pending',
+  });
+
+  logger.info(`Withdrawal request ${withdrawal.id} created for user ${req.user.id}: ${amount} via ${method}`);
+
+  res.status(201).json({
+    success: true,
+    data: { withdrawal },
+    message: 'Withdrawal request submitted. Awaiting admin approval.',
+  });
+});
+
+exports.getWithdrawalHistory = catchAsync(async (req, res) => {
+  const { page = 1, limit = 20 } = req.query;
+  const offset = (page - 1) * limit;
+
+  const { count, rows } = await WithdrawalRequest.findAndCountAll({
+    where: { userId: req.user.id },
+    order: [['createdAt', 'DESC']],
+    limit: parseInt(limit),
+    offset: parseInt(offset),
+  });
+
+  res.status(200).json({
+    success: true,
+    data: { withdrawals: rows, total: count, pages: Math.ceil(count / limit), currentPage: parseInt(page) },
   });
 });

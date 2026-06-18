@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { CheckCircle } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { paymentsAPI, rideAPI } from '../services/api';
 
@@ -64,7 +65,7 @@ function PaymentCheckout() {
       <div className="card p-8 text-center">
         {status === 'success' && (
           <>
-            <div className="text-5xl mb-4">&#10004;&#65039;</div>
+            <CheckCircle className="w-12 h-12 mx-auto text-success" />
             <h2 className="font-display text-xl font-semibold text-navy m-0 mb-2">Payment Successful!</h2>
             <p className="text-stone text-sm mb-6">Your ride has been paid. You can track it from your dashboard.</p>
             {sessionStatus?.customerEmail && (

@@ -23,14 +23,14 @@ function Avatar({ name = '?', size = 'md', src, className = '' }) {
       <img
         src={src}
         alt={name}
-        className={`${dim} rounded-full object-cover flex-shrink-0 ${className}`}
+        className={`${dim} rounded-full  object-cover flex-shrink-0 ${className}`}
       />
     );
   }
 
   return (
     <span
-      className={`${dim} rounded-full flex items-center justify-center font-semibold text-white flex-shrink-0 ${className}`}
+      className={`${dim}  rounded-full flex items-center justify-center font-semibold text-white flex-shrink-0 ${className}`}
       style={{ backgroundColor: bg }}
       title={name}
     >

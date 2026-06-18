@@ -1,4 +1,5 @@
 import { useState, useEffect, useContext, useCallback, useRef, useMemo } from 'react';
+import { Car } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { rideAPI, sosAPI, paymentsAPI } from '../services/api';
 import { AuthContext } from '../context/AuthContext';
@@ -108,7 +109,7 @@ function ActiveRide() {
       <div className="page">
         <div className="page-header"><h1>Active Ride</h1></div>
         <div className="empty-state mt-6">
-          <div className="empty-state-icon">&#128663;</div>
+          <Car className="w-10 h-10 mx-auto" />
           <h3>No active ride</h3>
           <p>You don't have an active ride right now.</p>
           {user?.role === 'passenger' && <button className="btn btn-primary mt-4" onClick={() => navigate('/ride/request')}>Request a Ride</button>}

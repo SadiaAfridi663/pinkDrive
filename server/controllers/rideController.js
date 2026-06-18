@@ -308,6 +308,14 @@ exports.updateRideStatus = catchAsync(async (req, res, next) => {
       });
 
       if (ride.driverId) {
+        const driverWallet = await Wallet.findOne({ where: { userId: ride.driverId } });
+        if (driverWallet) {
+          driverWallet.balance = parseFloat(driverWallet.balance) + parseFloat(ride.fare);
+          await driverWallet.save();
+        } else {
+          await Wallet.create({ userId: ride.driverId, balance: parseFloat(ride.fare) });
+        }
+
         await Transaction.create({
           userId: ride.driverId,
           type: 'ride_earnings',

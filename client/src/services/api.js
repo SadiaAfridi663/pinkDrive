@@ -35,6 +35,10 @@ export const authAPI = {
   logout: () => api.post('/auth/logout'),
   verifyEmail: (token) => api.post('/auth/verify', { token }),
   resendVerification: (email) => api.post('/auth/resend-verification', { email }),
+  uploadProfilePhoto: (formData) =>
+    api.post('/auth/profile-photo', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
 };
 
 export const driverAPI = {
@@ -64,6 +68,8 @@ export const adminAPI = {
   getDisputeById: (id) => api.get(`/admin/disputes/${id}`),
   resolveDispute: (id, data) => api.patch(`/admin/disputes/${id}/resolve`, data),
   clearDebt: (id) => api.post(`/admin/debts/${id}/clear`),
+  getWithdrawals: (params) => api.get('/admin/withdrawals', { params }),
+  processWithdrawal: (id, data) => api.patch(`/admin/withdrawals/${id}`, data),
 };
 
 export const rideAPI = {
@@ -98,18 +104,21 @@ export const serviceAreaAPI = {
   remove: (id) => api.delete(`/service-areas/${id}`),
 };
 
-export const paymentsAPI = {
-  getConfig: () => api.get('/payments/config'),
-  createCheckoutSession: (rideId) => api.post('/payments/create-checkout-session', { rideId }),
-  getSessionStatus: (sessionId) => api.get('/payments/session-status', { params: { session_id: sessionId } }),
-};
-
 export const walletAPI = {
   getWallet: () => api.get('/wallet'),
   topup: (amount) => api.post('/wallet/topup', { amount }),
   confirmTopup: (sessionId) => api.post('/wallet/confirm-topup', { session_id: sessionId }),
   getTransactions: (params) => api.get('/wallet/transactions', { params }),
   getDriverEarnings: (params) => api.get('/wallet/driver-earnings', { params }),
+  getWithdrawable: () => api.get('/wallet/withdrawable'),
+  requestWithdrawal: (data) => api.post('/wallet/withdraw', data),
+  getWithdrawals: (params) => api.get('/wallet/withdrawals', { params }),
+};
+
+export const paymentsAPI = {
+  getConfig: () => api.get('/payments/config'),
+  createCheckoutSession: (rideId) => api.post('/payments/create-checkout-session', { rideId }),
+  getSessionStatus: (sessionId) => api.get('/payments/session-status', { params: { session_id: sessionId } }),
 };
 
 export const sosAPI = {

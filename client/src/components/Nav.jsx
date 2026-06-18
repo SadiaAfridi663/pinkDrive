@@ -10,23 +10,27 @@ function Nav() {
 
   if (!user) return null;
 
+  const walletLink = { to: '/wallet', label: 'Wallet' };
   const links = user.role === 'passenger'
     ? [
         { to: '/passenger', label: 'Dashboard' },
         { to: '/ride/request', label: 'New Ride' },
         { to: '/emergency-contacts', label: 'Emergency' },
+        walletLink,
       ]
     : user.role === 'driver'
       ? [
           { to: '/driver/dashboard', label: 'Dashboard' },
           { to: '/driver/rides', label: 'Rides' },
           { to: '/driver/verification', label: 'Documents' },
+          walletLink,
         ]
       : [
           { to: '/admin', label: 'Dashboard' },
           { to: '/admin/verifications', label: 'Verifications' },
           { to: '/admin/users', label: 'Users' },
           { to: '/admin/rides', label: 'Rides' },
+          { to: '/admin/wallet', label: 'Wallet' },
           { to: '/admin/sos', label: 'SOS' },
           { to: '/admin/geo-fence', label: 'Geo-Fence' },
           { to: '/admin/activity', label: 'Activity' },

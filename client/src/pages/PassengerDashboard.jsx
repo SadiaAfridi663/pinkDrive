@@ -1,6 +1,7 @@
 import { useState, useEffect, useContext, useCallback } from 'react';
+import { Car, Wallet } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { rideAPI } from '../services/api';
+import { rideAPI, walletAPI } from '../services/api';
 import { AuthContext } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 
@@ -12,6 +13,7 @@ function PassengerDashboard() {
   const [activeRide, setActiveRide] = useState(null);
   const [activeDriver, setActiveDriver] = useState(null);
   const [history, setHistory] = useState([]);
+  const [walletBalance, setWalletBalance] = useState(null);
   const [loading, setLoading] = useState(true);
   const { user } = useContext(AuthContext);
   const { socket } = useSocket();
@@ -19,15 +21,17 @@ function PassengerDashboard() {
 
   const fetch = useCallback(async (mounted = true) => {
     try {
-      const [activeRes, historyRes] = await Promise.all([
+      const [activeRes, historyRes, walletRes] = await Promise.all([
         rideAPI.getActiveRide(),
         rideAPI.getHistory().catch(() => ({ data: { data: { rides: [] } } })),
+        walletAPI.getWallet().catch(() => ({ data: { data: { wallet: { balance: 0 } } } })),
       ]);
       if (mounted) {
         const active = activeRes.data.data;
         setActiveRide(active.ride);
         setActiveDriver(active.driver);
         setHistory(historyRes.data.data.rides.slice(0, 5));
+        setWalletBalance(walletRes.data.data.wallet.balance);
       }
     } catch {
       // no active ride
@@ -123,10 +127,16 @@ function PassengerDashboard() {
         </div>
       ) : (
         <div className="empty-state mt-6">
-          <div className="empty-state-icon">&#128663;</div>
+          <Car className="w-10 h-10 mx-auto" />
           <h3>Where to?</h3>
           <p>Book a ride to get started. Select your pickup and drop-off locations, verify with a selfie, and you're on your way.</p>
-          <button className="btn btn-primary btn-lg mt-4" onClick={() => navigate('/ride/request')}>Request a Ride</button>
+          <div className="flex items-center gap-2 mt-4 justify-center">
+            <button className="btn btn-primary btn-lg" onClick={() => navigate('/ride/request')}>Request a Ride</button>
+            <button className="btn btn-secondary btn-lg flex items-center gap-1.5" onClick={() => navigate('/wallet')}>
+              <Wallet className="w-4 h-4" />
+              {walletBalance !== null ? `${parseFloat(walletBalance).toFixed(0)} PKR` : 'Wallet'}
+            </button>
+          </div>
         </div>
       )}
 

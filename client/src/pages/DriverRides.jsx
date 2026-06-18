@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { Car } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { rideAPI } from '../services/api';
 import { useSocket } from '../context/SocketContext';
@@ -392,7 +393,7 @@ function DriverRidesInner() {
 
         {pendingRides.length === 0 ? (
           <div className="text-center p-12 mt-0">
-            <div className="text-4xl mb-2">&#128663;</div>
+            <Car className="w-9 h-9 mx-auto" />
             <h3 className="font-display text-[1.2rem] font-semibold text-navy m-0 mb-1">No ride requests</h3>
             <p className="text-sm text-stone m-0">Waiting for passengers to request rides.</p>
           </div>

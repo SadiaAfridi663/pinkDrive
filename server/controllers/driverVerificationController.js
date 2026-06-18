@@ -14,6 +14,10 @@ exports.uploadDocuments = catchAsync(async (req, res, next) => {
     return next(new AppError('Only drivers can upload verification documents.', 403));
   }
 
+  if (driver.isDriverVerified) {
+    return next(new AppError('Your account is already verified. No further document uploads are allowed.', 400));
+  }
+
   const fileValues = req.files ? Object.values(req.files).flat() : [];
   if (fileValues.length === 0) {
     return next(new AppError('At least one document is required.', 400));

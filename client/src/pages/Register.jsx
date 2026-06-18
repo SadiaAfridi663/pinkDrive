@@ -1,8 +1,10 @@
 import { useState, useContext, useRef, useEffect } from 'react';
+import { User, Car, Camera } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { ToastContext } from '../context/ToastContext';
 import { authAPI } from '../services/api';
+import SelfieCapture from '../components/SelfieCapture';
 
 const DOC_TYPES = [
   { key: 'license', label: "Driver's License" },
@@ -29,6 +31,9 @@ function Register() {
   const [uploading, setUploading] = useState(false);
   const [docError, setDocError] = useState('');
   const [resending, setResending] = useState(false);
+  const [showSelfieStep, setShowSelfieStep] = useState(false);
+  const [selfieDataUrl, setSelfieDataUrl] = useState(null);
+  const [uploadingSelfie, setUploadingSelfie] = useState(false);
   const fileInputRefs = useRef({});
 
   useEffect(() => {
@@ -100,8 +105,7 @@ function Register() {
       setOtpVerified(true);
       if (form.role !== 'driver') {
         await login(form.email, form.password);
-        showToast('Welcome to PinkDrive!', 'success');
-        navigate('/');
+        setShowSelfieStep(true);
       } else {
         showToast('Email verified! Now upload your documents.', 'success');
       }
@@ -125,6 +129,33 @@ function Register() {
     } finally {
       setResending(false);
     }
+  };
+
+  const handleSelfieConfirm = async () => {
+    if (!selfieDataUrl) return;
+    setUploadingSelfie(true);
+    try {
+      const byteString = atob(selfieDataUrl.split(',')[1]);
+      const mimeType = selfieDataUrl.split(',')[0].match(/:(.*?);/)[1];
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+      const blob = new Blob([ab], { type: mimeType });
+      const file = new File([blob], 'selfie.jpg', { type: mimeType });
+      const fd = new FormData();
+      fd.append('photo', file);
+      await authAPI.uploadProfilePhoto(fd);
+      showToast('Welcome to PinkDrive!', 'success');
+      navigate('/');
+    } catch {
+      showToast('Profile photo upload failed. You can add it later.', 'warning');
+      navigate('/');
+    }
+  };
+
+  const handleSelfieSkip = () => {
+    showToast('Welcome to PinkDrive!', 'success');
+    navigate('/');
   };
 
   const handleDocSubmit = async () => {
@@ -178,12 +209,12 @@ function Register() {
                     <div className="flex gap-2">
                       <label className={`flex-1 flex flex-col items-center gap-1 p-3 border-2 rounded-sm cursor-pointer transition text-sm ${form.role === 'passenger' ? 'border-pink bg-pink-subtle text-pink font-semibold' : 'border-border text-charcoal bg-white hover:border-pink'}`}>
                         <input type="radio" name="role" value="passenger" checked={form.role === 'passenger'} onChange={handleChange} className="hidden" />
-                        <span className="text-[1.4rem]">&#128694;</span>
+                        <User size={22} />
                         <span>Passenger</span>
                       </label>
                       <label className={`flex-1 flex flex-col items-center gap-1 p-3 border-2 rounded-sm cursor-pointer transition text-sm ${form.role === 'driver' ? 'border-pink bg-pink-subtle text-pink font-semibold' : 'border-border text-charcoal bg-white hover:border-pink'}`}>
                         <input type="radio" name="role" value="driver" checked={form.role === 'driver'} onChange={handleChange} className="hidden" />
-                        <span className="text-[1.4rem]">&#128663;</span>
+                        <Car size={22} />
                         <span>Driver</span>
                       </label>
                     </div>
@@ -196,6 +227,21 @@ function Register() {
                   Already have an account? <Link to="/login" className="text-pink no-underline font-semibold hover:underline">Login</Link>
                 </p>
               </>
+            )}
+
+            {showSelfieStep && form.role !== 'driver' && (
+              <div>
+                <p className="text-xs text-text-muted mb-3">Take a selfie to set your profile photo.</p>
+                <SelfieCapture onCapture={(url) => setSelfieDataUrl(url)} />
+                {selfieDataUrl && (
+                  <div className="flex gap-2 mt-3">
+                    <button className="btn btn-secondary flex-1 text-sm" onClick={handleSelfieSkip}>Skip</button>
+                    <button className="btn btn-primary flex-1 text-sm" onClick={handleSelfieConfirm} disabled={uploadingSelfie}>
+                      {uploadingSelfie ? 'Uploading...' : 'Continue'}
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
 
             {otpVerified && form.role === 'driver' && (

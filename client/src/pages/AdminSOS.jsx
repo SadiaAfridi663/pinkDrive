@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { CheckCircle } from 'lucide-react';
 import { sosAPI } from '../services/api';
 import { useSocket } from '../context/SocketContext';
 
@@ -96,7 +97,7 @@ function AdminSOS() {
 
       {alerts.length === 0 ? (
         <div className="text-center p-12">
-          <div className="text-4xl mb-2">&#10004;&#65039;</div>
+          <CheckCircle className="w-9 h-9 mx-auto text-success" />
           <h3 className="font-display text-[1.2rem] font-semibold text-navy m-0 mb-1">All clear</h3>
           <p className="text-sm text-stone m-0">No {filter || ''} SOS alerts.</p>
         </div>

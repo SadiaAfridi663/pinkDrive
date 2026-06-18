@@ -56,4 +56,11 @@ router.get('/me', authenticate, authController.getMe);
 
 router.post('/logout', authenticate, authController.logout);
 
+router.post(
+  '/profile-photo',
+  authenticate,
+  upload.single('photo'),
+  authController.uploadProfilePhoto,
+);
+
 module.exports = router;

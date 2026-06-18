@@ -46,7 +46,7 @@ const ORANGE_ICON = new L.Icon({
 });
 
 const CAR_ICON = L.divIcon({
-  html: '<div style="font-size:1.4rem;transform:rotate(-45deg)">🚗</div>',
+  html: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1a1a2e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(-45deg)"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9L18 10l-2-4c-.3-.6-1-1-1.7-1H9.7c-.7 0-1.4.4-1.7 1L6 10l-2.5.1C2.7 10.3 2 11.1 2 12v3c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg>',
   className: '',
   iconSize: [24, 24],
   iconAnchor: [12, 12],

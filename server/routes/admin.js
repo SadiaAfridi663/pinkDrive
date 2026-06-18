@@ -20,5 +20,7 @@ router.get('/disputes', adminController.getDisputes);
 router.get('/disputes/:id', adminController.getDisputeById);
 router.patch('/disputes/:id/resolve', adminController.resolveDispute);
 router.post('/debts/:id/clear', adminController.clearDebt);
+router.get('/withdrawals', adminController.getWithdrawals);
+router.patch('/withdrawals/:id', adminController.processWithdrawal);
 
 module.exports = router;

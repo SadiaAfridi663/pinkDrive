@@ -102,9 +102,14 @@ function WalletPage() {
       </div>
 
       {user?.role === 'driver' && (
-        <button className="btn btn-secondary mb-4 w-full" onClick={() => navigate('/wallet/earnings')}>
-          View Driver Earnings
-        </button>
+        <div className="flex gap-2 mb-4">
+          <button className="btn btn-secondary flex-1" onClick={() => navigate('/wallet/earnings')}>
+            View Earnings
+          </button>
+          <button className="btn btn-primary flex-1" onClick={() => navigate('/wallet/withdraw')}>
+            Withdraw
+          </button>
+        </div>
       )}
 
       <h3 className="font-display text-base font-semibold text-navy mb-3 tracking-[-0.01em] m-0">Recent Transactions</h3>

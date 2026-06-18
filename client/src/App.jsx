@@ -29,6 +29,8 @@ import RideDetail from './pages/RideDetail';
 import PaymentCheckout from './pages/PaymentCheckout';
 import WalletPage from './pages/WalletPage';
 import DriverEarnings from './pages/DriverEarnings';
+import DriverWithdraw from './pages/DriverWithdraw';
+import AdminWallet from './pages/AdminWallet';
 
 function Home() {
   const { user } = useContext(AuthContext);
@@ -59,6 +61,7 @@ function App() {
           <Route path="/driver/verification" element={<Layout roles={['driver']}><DriverVerification /></Layout>} />
           <Route path="/wallet" element={<Layout roles={['passenger', 'driver']}><WalletPage /></Layout>} />
           <Route path="/wallet/earnings" element={<Layout roles={['driver']}><DriverEarnings /></Layout>} />
+          <Route path="/wallet/withdraw" element={<Layout roles={['driver']}><DriverWithdraw /></Layout>} />
           <Route path="/driver/dashboard" element={<Layout roles={['driver']}><DriverDashboard /></Layout>} />
           <Route path="/driver/rides" element={<Layout roles={['driver']}><DriverRides /></Layout>} />
           <Route path="/admin" element={<Layout roles={['admin']}><AdminDashboard /></Layout>} />
@@ -71,6 +74,7 @@ function App() {
           <Route path="/admin/activity" element={<Layout roles={['admin']}><AdminActivity /></Layout>} />
           <Route path="/admin/payments" element={<Layout roles={['admin']}><AdminPayments /></Layout>} />
           <Route path="/admin/disputes" element={<Layout roles={['admin']}><AdminDisputes /></Layout>} />
+          <Route path="/admin/wallet" element={<Layout roles={['admin']}><AdminWallet /></Layout>} />
           <Route path="/emergency-contacts" element={<Layout roles={['passenger']}><EmergencyContacts /></Layout>} />
           <Route path="/passenger" element={<Layout roles={['passenger']}><PassengerDashboard /></Layout>} />
           <Route path="/ride/request" element={<Layout roles={['passenger']}><RequestRide /></Layout>} />

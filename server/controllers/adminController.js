@@ -2,6 +2,8 @@ const User = require('../models/User');
 const Ride = require('../models/Ride');
 const Dispute = require('../models/Dispute');
 const Debt = require('../models/Debt');
+const Wallet = require('../models/Wallet');
+const Transaction = require('../models/Transaction');
 const SOSAlert = require('../models/SOSAlert');
 const DriverDocument = require('../models/DriverDocument');
 const catchAsync = require('../utils/catchAsync');
@@ -9,6 +11,7 @@ const AppError = require('../utils/AppError');
 const { Op } = require('sequelize');
 const logger = require('../utils/logger');
 const { fileToUrl } = require('../utils/geo');
+const WithdrawalRequest = require('../models/WithdrawalRequest');
 const { sendDisputeUpdate } = require('../services/receiptService');
 
 exports.getStats = catchAsync(async (req, res, next) => {
@@ -512,4 +515,88 @@ exports.updateUserRestriction = catchAsync(async (req, res, next) => {
     data: { restriction: user.restriction, warningCount: user.warningCount },
     message: `User restriction set to "${restriction}".`,
   });
+});
+
+exports.getWithdrawals = catchAsync(async (req, res) => {
+  const { page = 1, limit = 20, status } = req.query;
+  const offset = (page - 1) * limit;
+  const where = {};
+  if (status) where.status = status;
+
+  const { count, rows } = await WithdrawalRequest.findAndCountAll({
+    where,
+    order: [['createdAt', 'DESC']],
+    limit: parseInt(limit),
+    offset: parseInt(offset),
+  });
+
+  const userIds = [...new Set(rows.map((w) => w.userId))];
+  const users = await User.findAll({ where: { id: userIds }, attributes: ['id', 'name', 'email', 'phone'] });
+  const userMap = Object.fromEntries(users.map((u) => [u.id, u]));
+
+  const enriched = rows.map((w) => {
+    const json = w.toJSON();
+    json.user = userMap[w.userId] || null;
+    return json;
+  });
+
+  res.status(200).json({
+    success: true,
+    data: { withdrawals: enriched, total: count, pages: Math.ceil(count / limit), currentPage: parseInt(page) },
+  });
+});
+
+exports.processWithdrawal = catchAsync(async (req, res, next) => {
+  const { action, adminNote } = req.body;
+  if (!['approved', 'rejected'].includes(action)) {
+    return next(new AppError('Action must be approved or rejected.', 400));
+  }
+
+  const withdrawal = await WithdrawalRequest.findByPk(req.params.id);
+  if (!withdrawal) return next(new AppError('Withdrawal request not found.', 404));
+  if (withdrawal.status !== 'pending') {
+    return next(new AppError('Withdrawal request has already been processed.', 400));
+  }
+
+  if (action === 'rejected') {
+    withdrawal.status = 'rejected';
+    withdrawal.adminNote = adminNote || null;
+    withdrawal.processedAt = new Date();
+    await withdrawal.save();
+    logger.info(`Withdrawal ${withdrawal.id} rejected: ${adminNote}`);
+    return res.status(200).json({ success: true, message: 'Withdrawal rejected.' });
+  }
+
+  // Approve: deduct from wallet balance
+  const wallet = await Wallet.findOne({ where: { userId: withdrawal.userId } });
+  if (!wallet || parseFloat(wallet.balance) < parseFloat(withdrawal.amount)) {
+    withdrawal.status = 'rejected';
+    withdrawal.adminNote = 'Insufficient wallet balance at time of processing.';
+    withdrawal.processedAt = new Date();
+    await withdrawal.save();
+    return next(new AppError('Insufficient wallet balance. Withdrawal rejected.', 400));
+  }
+
+  wallet.balance = parseFloat(wallet.balance) - parseFloat(withdrawal.amount);
+  await wallet.save();
+
+  await Transaction.create({
+    userId: withdrawal.userId,
+    type: 'withdrawal',
+    amount: withdrawal.amount,
+    direction: 'debit',
+    description: `Withdrawal via ${withdrawal.method} (${withdrawal.id.slice(0, 8)}...)`,
+    referenceId: withdrawal.id,
+    referenceType: 'withdrawal',
+    status: 'completed',
+  });
+
+  withdrawal.status = 'approved';
+  withdrawal.adminNote = adminNote || null;
+  withdrawal.processedAt = new Date();
+  await withdrawal.save();
+
+  logger.info(`Withdrawal ${withdrawal.id} approved: ${withdrawal.amount} via ${withdrawal.method}`);
+
+  res.status(200).json({ success: true, message: 'Withdrawal approved and processed.' });
 });

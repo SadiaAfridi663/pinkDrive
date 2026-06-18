@@ -108,18 +108,26 @@ function DriverDashboard() {
         <div className="mt-6">
           <h3 className="font-body text-xs font-semibold uppercase tracking-[0.08em] text-stone m-0 mb-3">Documents</h3>
           <div className="flex flex-col gap-1.5">
-            {data.documents.map((doc) => (
-              <div key={doc.id} className="bg-white border border-border rounded-sm px-4 py-3 flex items-center justify-between">
-                <span className="text-[0.85rem] text-charcoal">
-                  {doc.documentType === 'license' ? "Driver's License" : doc.documentType === 'registration' ? 'Vehicle Registration' : 'Profile Photo'}
-                </span>
-                <span className={`text-[0.7rem] font-semibold uppercase tracking-[0.05em] px-2 py-0.5 rounded-sm ${
-                  doc.status === 'approved' ? 'bg-[#e8f5e9] text-success' :
-                  doc.status === 'rejected' ? 'bg-[#ffebee] text-error' :
-                  'bg-[#fff8e1] text-warning'
-                }`}>{doc.status}</span>
-              </div>
-            ))}
+            {data.documents.map((doc) => {
+              const rejectedNote = doc.status === 'rejected' && doc.adminNote;
+              return (
+                <div key={doc.id}>
+                  <div className="bg-white border border-border rounded-sm px-4 py-3 flex items-center justify-between">
+                    <span className="text-[0.85rem] text-charcoal">
+                      {doc.documentType === 'license' ? "Driver's License" : doc.documentType === 'registration' ? 'Vehicle Registration' : 'Profile Photo'}
+                    </span>
+                    <span className={`text-[0.7rem] font-semibold uppercase tracking-[0.05em] px-2 py-0.5 rounded-sm ${
+                      doc.status === 'approved' ? 'bg-[#e8f5e9] text-success' :
+                      doc.status === 'rejected' ? 'bg-[#ffebee] text-error' :
+                      'bg-[#fff8e1] text-warning'
+                    }`}>{doc.status}</span>
+                  </div>
+                  {rejectedNote && (
+                    <p className="m-0 mt-0.5 text-xs text-error px-4">{rejectedNote}</p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

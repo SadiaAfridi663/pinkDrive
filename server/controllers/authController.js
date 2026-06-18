@@ -205,20 +205,34 @@ exports.finalizeDriver = catchAsync(async (req, res, next) => {
   });
 
   const docsDir = path.join(__dirname, '..', 'uploads', 'driver-docs');
+  let profilePhotoUrl = null;
+
   for (const file of fileValues) {
     const ext = path.extname(file.originalname);
     const unique = require('crypto').randomBytes(12).toString('hex');
     const dest = path.join(docsDir, `${unique}${ext}`);
     fs.copyFileSync(file.path, dest);
+
+    const url = fileToUrl(dest);
+
     await DriverDocument.create({
       userId: user.id,
       documentType: file.fieldname,
-      filePath: fileToUrl(dest),
+      filePath: url,
       originalName: file.originalname,
       mimeType: file.mimetype,
       status: 'pending',
     });
+
+    if (file.fieldname === 'profile_photo') {
+      profilePhotoUrl = url;
+    }
+
     fs.unlinkSync(file.path);
+  }
+
+  if (profilePhotoUrl) {
+    await user.update({ profilePhoto: profilePhotoUrl });
   }
 
   const pendingDir = path.join(TEMP_DOC_DIR, token);
@@ -341,6 +355,22 @@ exports.getMe = catchAsync(async (req, res, next) => {
   res.status(200).json({
     success: true,
     data: { user },
+  });
+});
+
+exports.uploadProfilePhoto = catchAsync(async (req, res, next) => {
+  if (!req.file) return next(new AppError('Photo is required.', 400));
+
+  const url = fileToUrl(req.file.path);
+  req.user.profilePhoto = url;
+  await req.user.save();
+
+  logger.info(`Profile photo updated for user ${req.user.id}`);
+
+  res.status(200).json({
+    success: true,
+    data: { profilePhoto: url },
+    message: 'Profile photo updated.',
   });
 });
 

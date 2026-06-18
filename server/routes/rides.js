@@ -32,7 +32,7 @@ router.post(
     body('pickupLng').isFloat().withMessage('Pickup longitude required.'),
     body('dropoffLat').isFloat().withMessage('Drop-off latitude required.'),
     body('dropoffLng').isFloat().withMessage('Drop-off longitude required.'),
-    body('paymentMethod').optional().isIn(['cash', 'stripe', 'card', 'easypaisa', 'jazzcash']).withMessage('Payment method must be cash, stripe, card, easypaisa, or jazzcash.'),
+    body('paymentMethod').optional().isIn(['cash', 'stripe', 'card', 'easypaisa', 'jazzcash', 'wallet']).withMessage('Payment method must be cash, stripe, card, easypaisa, jazzcash, or wallet.'),
   ],
   createRide,
 );
