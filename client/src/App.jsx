@@ -23,6 +23,7 @@ import AdminPayments from './pages/AdminPayments';
 import AdminDisputes from './pages/AdminDisputes';
 import EmergencyContacts from './pages/EmergencyContacts';
 import PassengerDashboard from './pages/PassengerDashboard';
+import PassengerBidding from './pages/PassengerBidding';
 import RequestRide from './pages/RequestRide';
 import ActiveRide from './pages/ActiveRide';
 import RideDetail from './pages/RideDetail';
@@ -78,6 +79,7 @@ function App() {
           <Route path="/emergency-contacts" element={<Layout roles={['passenger']}><EmergencyContacts /></Layout>} />
           <Route path="/passenger" element={<Layout roles={['passenger']}><PassengerDashboard /></Layout>} />
           <Route path="/ride/request" element={<Layout roles={['passenger']}><RequestRide /></Layout>} />
+          <Route path="/ride/bidding/:id" element={<Layout roles={['passenger']}><PassengerBidding /></Layout>} />
           <Route path="/ride/active" element={<Layout roles={['passenger', 'driver']}><ActiveRide /></Layout>} />
           <Route path="/ride/:id" element={<Layout roles={['passenger', 'driver']}><RideDetail /></Layout>} />
           <Route path="/payment/result" element={<Layout roles={['passenger']}><PaymentCheckout /></Layout>} />

@@ -8,6 +8,7 @@ const {
   getActiveRide,
   getPendingRides,
   acceptRide,
+  acceptOffer,
   updateRideStatus,
   confirmPayment,
   acknowledgePayment,
@@ -18,6 +19,7 @@ const {
   updateDriverLocation,
   getNearbyDrivers,
   uploadTempSelfie,
+  getRideBids,
 } = require('../controllers/rideController');
 
 const router = express.Router();
@@ -57,6 +59,8 @@ router.get('/pending', authorize('driver'), getPendingRides);
 
 router.patch('/:id/accept', authorize('driver'), acceptRide);
 
+router.post('/accept-offer', authorize('passenger'), acceptOffer);
+
 router.patch(
   '/:id/status',
   authorize('driver'),
@@ -73,6 +77,8 @@ router.post('/:id/report-issue', reportIssue);
 router.get('/history', getRideHistory);
 
 router.get('/nearby-drivers', getNearbyDrivers);
+
+router.get('/:id/bids', getRideBids);
 
 router.get('/:id', getRideById);
 

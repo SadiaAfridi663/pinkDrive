@@ -34,7 +34,7 @@ function AuthProvider({ children }) {
   const loadUser = useCallback(async () => {
     try {
       const res = await authAPI.getMe();
-      dispatch({ type: 'AUTH_SUCCESS', payload: { user: res.data.data.user } });
+      dispatch({ type: 'AUTH_SUCCESS', payload: { user: res.data.data.user, token: res.data.data.token } });
       logger.info('User session loaded');
     } catch {
       dispatch({ type: 'AUTH_FAILURE', payload: null });
@@ -63,7 +63,7 @@ function AuthProvider({ children }) {
     dispatch({ type: 'AUTH_START' });
     try {
       const res = await authAPI.login({ email, password });
-      dispatch({ type: 'AUTH_SUCCESS', payload: { user: res.data.data.user } });
+      dispatch({ type: 'AUTH_SUCCESS', payload: { user: res.data.data.user, token: res.data.data.token } });
       logger.info('Login successful');
       return res.data;
     } catch (err) {

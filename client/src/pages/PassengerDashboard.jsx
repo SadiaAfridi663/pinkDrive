@@ -122,7 +122,7 @@ function PassengerDashboard() {
                 </div>
               )}
             </div>
-            <button className="btn btn-primary" onClick={() => navigate('/ride/active')}>View Details</button>
+            <button className="btn btn-primary" onClick={() => navigate(activeRide.status === 'pending' ? `/ride/bidding/${activeRide.id}` : '/ride/active')}>View Details</button>
           </div>
         </div>
       ) : (

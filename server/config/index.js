@@ -15,6 +15,7 @@ const connectDatabases = async () => {
   require('../models/Wallet');
   require('../models/Transaction');
   require('../models/WithdrawalRequest');
+  require('../models/Bid');
   await connectSQL();
 };
 

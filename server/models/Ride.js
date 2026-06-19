@@ -53,6 +53,10 @@ const Ride = sequelize.define('Ride', {
     type: DataTypes.STRING,
     allowNull: true,
   },
+  passengerOffer: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true,
+  },
   fare: {
     type: DataTypes.DECIMAL(10, 2),
     defaultValue: 0,

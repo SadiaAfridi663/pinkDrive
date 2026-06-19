@@ -6,6 +6,7 @@ const Debt = require('../models/Debt');
 const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
 const DriverDocument = require('../models/DriverDocument');
+const Bid = require('../models/Bid');
 const AppError = require('../utils/AppError');
 const catchAsync = require('../utils/catchAsync');
 const logger = require('../utils/logger');
@@ -24,7 +25,7 @@ const RIDE_STATUS_FLOW = ['pending', 'accepted', 'arrived', 'in_progress', 'comp
 const FARE_PER_KM = 50;
 
 exports.createRide = catchAsync(async (req, res, next) => {
-  const { pickupLat, pickupLng, dropoffLat, dropoffLng, selfiePath, paymentMethod } = req.body;
+  const { pickupLat, pickupLng, dropoffLat, dropoffLng, selfiePath, paymentMethod, passengerOffer } = req.body;
 
   if (!pickupLat || !pickupLng || !dropoffLat || !dropoffLng) {
     return next(new AppError('Pickup and drop-off locations are required.', 400));
@@ -32,6 +33,10 @@ exports.createRide = catchAsync(async (req, res, next) => {
 
   if (!selfiePath) {
     return next(new AppError('Selfie is required before requesting a ride.', 400));
+  }
+
+  if (!passengerOffer || parseFloat(passengerOffer) <= 0) {
+    return next(new AppError('Please enter your offer amount.', 400));
   }
 
   const passenger = await User.findByPk(req.user.id);
@@ -66,7 +71,6 @@ exports.createRide = catchAsync(async (req, res, next) => {
   const [pickupAddress, dropoffAddress] = await reverseGeocodeBoth(pickupLat, pickupLng, dropoffLat, dropoffLng);
 
   const distance = haversineDistance(pickupLat, pickupLng, dropoffLat, dropoffLng);
-  const fare = Math.round(distance * FARE_PER_KM * 100) / 100;
 
   const ride = await Ride.create({
     passengerId: req.user.id,
@@ -78,18 +82,64 @@ exports.createRide = catchAsync(async (req, res, next) => {
     dropoffAddress,
     selfiePath,
     distance,
-    fare,
+    passengerOffer: parseFloat(passengerOffer),
+    fare: 0,
     paymentMethod: paymentMethod || 'cash',
     paymentStatus: 'pending',
     status: 'pending',
   });
 
-  logger.info(`Ride created: ${ride.id} by passenger ${req.user.email}`);
+  logger.info(`Ride created: ${ride.id} by passenger ${req.user.email}, offer: ${passengerOffer} PKR`);
+
+  // Notify nearby drivers
+  const io = getIO();
+  const onlineDrivers = getOnlineDrivers();
+  const onlineIds = Object.keys(onlineDrivers).filter((k) => !k.includes(':'));
+
+  if (onlineIds.length > 0) {
+    const drivers = await User.findAll({
+      where: {
+        id: onlineIds,
+        role: 'driver',
+        isDriverVerified: true,
+      },
+      attributes: ['id', 'name'],
+    });
+
+    const nearbyDrivers = drivers.filter((d) => {
+      const od = onlineDrivers[d.id];
+      // Use real-time location from socket if available
+      const lat = od?.lat ?? d.currentLat;
+      const lng = od?.lng ?? d.currentLng;
+      if (lat == null || lng == null) return true; // no location yet — still notify
+      const dist = haversineDistance(pickupLat, pickupLng, lat, lng);
+      return dist <= 10;
+    });
+
+    for (const driver of nearbyDrivers) {
+      const socketId = onlineDrivers[driver.id]?.socketId;
+      if (socketId) {
+        io.to(socketId).emit('ride:available', {
+          rideId: ride.id,
+          pickupLat,
+          pickupLng,
+          pickupAddress,
+          dropoffLat,
+          dropoffLng,
+          dropoffAddress,
+          distance,
+          passengerOffer: parseFloat(passengerOffer),
+          passengerName: passenger.name,
+          createdAt: ride.createdAt,
+        });
+      }
+    }
+  }
 
   res.status(201).json({
     success: true,
     data: { ride },
-    message: 'Ride requested. Waiting for a driver.',
+    message: 'Ride requested. Drivers will be notified.',
   });
 });
 
@@ -175,11 +225,6 @@ exports.getActiveRide = catchAsync(async (req, res, next) => {
 });
 
 exports.getPendingRides = catchAsync(async (req, res, next) => {
-  const driver = await User.findByPk(req.user.id);
-  if (!driver.isDriverVerified) {
-    return next(new AppError('Your driver account has not been verified yet.', 403));
-  }
-
   const rides = await Ride.findAll({
     where: { status: 'pending', driverId: null },
     order: [['createdAt', 'ASC']],
@@ -502,6 +547,64 @@ exports.reportIssue = catchAsync(async (req, res, next) => {
   });
 });
 
+const BID_TTL_MS = 30000; // 30 seconds for each bid
+const bidTimers = {};
+
+exports.acceptOffer = catchAsync(async (req, res, next) => {
+  const { bidId } = req.body;
+  if (!bidId) return next(new AppError('Bid ID is required.', 400));
+
+  const bid = await Bid.findByPk(bidId);
+  if (!bid) return next(new AppError('Bid not found.', 404));
+  if (bid.status !== 'active') return next(new AppError('This bid is no longer active.', 400));
+  if (new Date() > new Date(bid.expiresAt)) {
+    bid.status = 'expired';
+    await bid.save();
+    return next(new AppError('This bid has expired.', 400));
+  }
+
+  const ride = await Ride.findByPk(bid.rideId);
+  if (!ride) return next(new AppError('Ride not found.', 404));
+  if (ride.passengerId !== req.user.id) return next(new AppError('Unauthorized.', 403));
+  if (ride.status !== 'pending') return next(new AppError('This ride is no longer accepting offers.', 400));
+
+  bid.status = 'accepted';
+  await bid.save();
+
+  await Bid.update({ status: 'rejected' }, { where: { rideId: ride.id, id: { [Op.ne]: bidId }, status: 'active' } });
+
+  ride.driverId = bid.driverId;
+  ride.fare = bid.amount;
+  ride.status = 'accepted';
+  ride.startedAt = new Date();
+  await ride.save();
+
+  // Clear any pending bid timers for this ride
+  if (bidTimers[ride.id]) {
+    for (const timer of Object.values(bidTimers[ride.id])) clearTimeout(timer);
+    delete bidTimers[ride.id];
+  }
+
+  const io = getIO();
+  const driver = await User.findByPk(bid.driverId, { attributes: ['id', 'name', 'email', 'phone', 'profilePhoto'] });
+
+  io.to(`ride:${ride.id}`).emit('offer:accepted', {
+    rideId: ride.id,
+    bidId: bid.id,
+    driver: driver ? driver.toJSON() : null,
+    fare: bid.amount,
+    status: 'accepted',
+  });
+
+  logger.info(`Offer ${bid.id} accepted for ride ${ride.id}, driver ${bid.driverId}, amount ${bid.amount}`);
+
+  res.status(200).json({
+    success: true,
+    data: { ride, driver },
+    message: 'Offer accepted. Driver is on the way!',
+  });
+});
+
 exports.cancelRide = catchAsync(async (req, res, next) => {
   const ride = await Ride.findByPk(req.params.id);
   if (!ride) return next(new AppError('Ride not found.', 404));
@@ -627,6 +730,34 @@ exports.updateDriverLocation = catchAsync(async (req, res, next) => {
   await ride.save();
 
   res.status(200).json({ success: true, message: 'Location updated.' });
+});
+
+exports.getRideBids = catchAsync(async (req, res, next) => {
+  const { id } = req.params;
+  logger.info(`getRideBids called for ride ${id} by user ${req.user.id}`);
+  const activeBids = await Bid.findAll({
+    where: { rideId: id, status: 'active', expiresAt: { [Op.gt]: new Date() } },
+  });
+  logger.info(`getRideBids found ${activeBids.length} active bid(s) for ride ${id}`);
+  const driverIds = [...new Set(activeBids.map((b) => b.driverId))];
+  const drivers = driverIds.length > 0 ? await User.findAll({
+    where: { id: driverIds },
+    attributes: ['id', 'name', 'profilePhoto'],
+  }) : [];
+  const driverMap = Object.fromEntries(drivers.map((d) => [d.id, d]));
+  const data = activeBids.map((bid) => {
+    const driver = driverMap[bid.driverId];
+    return {
+      bidId: bid.id,
+      rideId: bid.rideId,
+      driverId: bid.driverId,
+      driverName: driver?.name,
+      driverPhoto: driver?.profilePhoto,
+      amount: parseFloat(bid.amount),
+      expiresAt: bid.expiresAt,
+    };
+  });
+  res.status(200).json({ success: true, data: { bids: data } });
 });
 
 exports.getNearbyDrivers = catchAsync(async (req, res, next) => {

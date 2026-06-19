@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Car } from 'lucide-react';
+import { Car, DollarSign } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { rideAPI } from '../services/api';
 import { useSocket } from '../context/SocketContext';
@@ -11,7 +11,7 @@ const API_URL = import.meta.env.VITE_API_URL
   : 'http://localhost:5000';
 
 function DriverRidesInner() {
-  const [pendingRides, setPendingRides] = useState([]);
+  const [availableRides, setAvailableRides] = useState([]);
   const [activeRide, setActiveRide] = useState(null);
   const [activeDriver, setActiveDriver] = useState(null);
   const [activePassenger, setActivePassenger] = useState(null);
@@ -22,6 +22,8 @@ function DriverRidesInner() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [confirmComplete, setConfirmComplete] = useState(false);
+  const [bidAmounts, setBidAmounts] = useState({});
+  const [submittingBid, setSubmittingBid] = useState(null);
   const navigate = useNavigate();
   const { socket } = useSocket();
   const watchIdRef = useRef(null);
@@ -29,17 +31,39 @@ function DriverRidesInner() {
 
   const fetchData = async () => {
     try {
-      const [pendingRes, activeRes, historyRes] = await Promise.all([
-        rideAPI.getPendingRides().catch(() => ({ data: { data: { rides: [] } } })),
+      const [activeRes, historyRes, pendingRes] = await Promise.all([
         rideAPI.getActiveRide(),
         rideAPI.getHistory().catch(() => ({ data: { data: { rides: [] } } })),
+        rideAPI.getPendingRides().catch((err) => {
+          if (err.response?.status !== 403) console.error('Failed to fetch pending rides:', err);
+          return { data: { data: { rides: [] } } };
+        }),
       ]);
-      setPendingRides(pendingRes.data.data.rides);
       const active = activeRes.data.data;
       setActiveRide(active.ride);
       setActiveDriver(active.driver);
       setActivePassenger(active.passenger);
       setHistory(historyRes.data.data.rides.slice(0, 10));
+
+      const restRides = (pendingRes.data.data.rides || []).map((r) => ({
+        rideId: r.id,
+        pickupLat: r.pickupLat,
+        pickupLng: r.pickupLng,
+        pickupAddress: r.pickupAddress,
+        dropoffLat: r.dropoffLat,
+        dropoffLng: r.dropoffLng,
+        dropoffAddress: r.dropoffAddress,
+        distance: r.distance,
+        passengerOffer: r.passengerOffer,
+        passengerName: r.passenger?.name,
+        createdAt: r.createdAt,
+        arrivedAt: Date.now(),
+      }));
+      setAvailableRides((prev) => {
+        const existingIds = new Set(prev.map((r) => r.rideId));
+        const newRides = restRides.filter((r) => !existingIds.has(r.rideId));
+        return [...newRides, ...prev];
+      });
     } catch (err) {
       if (err.response?.status !== 403) {
         setError(err.response?.data?.message || 'Failed to load.');
@@ -51,7 +75,50 @@ function DriverRidesInner() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 5000);
+  }, []);
+
+  // Share driver location on mount so we appear in onlineDrivers with location
+  useEffect(() => {
+    if (!socket?.connected || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setDriverLocation(loc);
+        socket.emit('location:update', { rideId: null, lat: loc.lat, lng: loc.lng });
+      },
+      () => {},
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  }, [socket?.connected]);
+
+  // Listen for ride:available via socket + emit driver:ready to get existing pending rides
+  // Re-emit driver:ready on reconnect for reliable ride discovery across sessions
+  useEffect(() => {
+    if (!socket) return;
+    const handler = (data) => {
+      setAvailableRides((prev) => {
+        if (prev.find((r) => r.rideId === data.rideId)) return prev;
+        return [{ ...data, arrivedAt: Date.now() }, ...prev];
+      });
+    };
+    const onReconnect = () => {
+      socket.emit('driver:ready');
+    };
+    socket.on('ride:available', handler);
+    socket.on('connect', onReconnect);
+    socket.emit('driver:ready');
+    return () => {
+      socket.off('ride:available', handler);
+      socket.off('connect', onReconnect);
+    };
+  }, [socket]);
+
+  // Remove stale available rides after 120 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const cutoff = Date.now() - 120000;
+      setAvailableRides((prev) => prev.filter((r) => r.arrivedAt > cutoff));
+    }, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -163,6 +230,36 @@ function DriverRidesInner() {
       setError(err.response?.data?.message || 'Failed to accept.');
     }
   };
+
+  const handleBid = (rideId) => {
+    if (!socket || !bidAmounts[rideId]) return;
+    const amount = parseFloat(bidAmounts[rideId]);
+    if (!amount || amount <= 0) { setError('Enter a valid bid amount.'); return; }
+    setSubmittingBid(rideId);
+    setError('');
+    socket.emit('driver:offer', { rideId, amount });
+    setAvailableRides((prev) => prev.filter((r) => r.rideId !== rideId));
+    setMessage(`Bid of ${amount} PKR submitted. Waiting for passenger response.`);
+    setTimeout(() => setSubmittingBid(null), 1000);
+  };
+
+  useEffect(() => {
+    if (!socket) return;
+    const handler = (data) => setMessage(`Offer of ${data.amount} PKR sent successfully!`);
+    const errHandler = (data) => setError(data.message || 'Bid failed.');
+    const expiredHandler = () => {
+      setMessage('Your offer has expired. The passenger did not respond in time.');
+      fetchData();
+    };
+    socket.on('offer:sent', handler);
+    socket.on('offer:error', errHandler);
+    socket.on('offer:expired', expiredHandler);
+    return () => {
+      socket.off('offer:sent', handler);
+      socket.off('offer:error', errHandler);
+      socket.off('offer:expired', expiredHandler);
+    };
+  }, [socket]);
 
   const handleStatus = async (rideId, status) => {
     setMessage('');
@@ -389,65 +486,64 @@ function DriverRidesInner() {
       )}
 
       <div className="mt-8">
-        <h3 className="font-display text-base font-semibold text-navy mb-3 tracking-[-0.01em] m-0">Pending Requests ({pendingRides.length})</h3>
+        <h3 className="font-display text-base font-semibold text-navy mb-3 tracking-[-0.01em] m-0">Available Rides ({availableRides.length})</h3>
 
-        {pendingRides.length === 0 ? (
+        {availableRides.length === 0 ? (
           <div className="text-center p-12 mt-0">
             <Car className="w-9 h-9 mx-auto" />
             <h3 className="font-display text-[1.2rem] font-semibold text-navy m-0 mb-1">No ride requests</h3>
-            <p className="text-sm text-stone m-0">Waiting for passengers to request rides.</p>
+            <p className="text-sm text-stone m-0">Waiting for passengers to request rides nearby.</p>
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {pendingRides.map((ride) => (
-              <div key={ride.id} className="card p-5">
+            {availableRides.map((ride) => (
+              <div key={ride.rideId} className="card p-5">
                 <div className="flex items-center gap-3 mb-3 p-2.5 bg-ivory rounded-sm">
-                  {ride.selfiePath ? (
-                    <img
-                      src={`${API_URL}/${ride.selfiePath.replace(/\\/g, '/')}`}
-                      alt={ride.passenger?.name}
-                      className="w-11 h-11 rounded-full object-cover border-2 border-border"
-                      onError={(e) => { e.target.style.display = 'none'; }}
-                    />
-                  ) : (
-                    <div className="w-11 h-11 rounded-full bg-coral-light flex items-center justify-center text-base text-coral">
-                      {ride.passenger?.name?.[0] || 'P'}
-                    </div>
-                  )}
-                  <div>
-                    <p className="m-0 font-semibold text-navy text-[0.95rem]">{ride.passenger?.name || 'Passenger'}</p>
+                  <div className="w-11 h-11 rounded-full bg-coral-light flex items-center justify-center text-base text-coral">
+                    {ride.passengerName?.[0] || 'P'}
                   </div>
-                </div>
-
-                <div className="mb-3 rounded-sm overflow-hidden border-2 border-border">
-                  <RideRouteMap
-                    pickup={{ lat: ride.pickupLat, lng: ride.pickupLng }}
-                    dropoff={{ lat: ride.dropoffLat, lng: ride.dropoffLng }}
-                    height="150px"
-                  />
+                  <div>
+                    <p className="m-0 font-semibold text-navy text-[0.95rem]">{ride.passengerName || 'Passenger'}</p>
+                    <p className="m-0 text-xs text-stone">Offers <strong>{ride.passengerOffer} PKR</strong></p>
+                  </div>
                 </div>
 
                 <div className="flex flex-col gap-2 mb-4">
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-stone">Pickup</span>
-                    <span className="font-medium text-navy font-mono">{ride.pickupAddress || `${ride.pickupLat?.toFixed(4)}, ${ride.pickupLng?.toFixed(4)}`}</span>
+                    <span className="font-medium text-navy font-mono text-right">{ride.pickupAddress || `${ride.pickupLat?.toFixed(4)}, ${ride.pickupLng?.toFixed(4)}`}</span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-stone">Drop-off</span>
-                    <span className="font-medium text-navy font-mono">{ride.dropoffAddress || `${ride.dropoffLat?.toFixed(4)}, ${ride.dropoffLng?.toFixed(4)}`}</span>
+                    <span className="font-medium text-navy font-mono text-right">{ride.dropoffAddress || `${ride.dropoffLat?.toFixed(4)}, ${ride.dropoffLng?.toFixed(4)}`}</span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-stone">Distance</span>
                     <span className="font-medium text-navy font-mono">{ride.distance ? `${ride.distance} km` : 'N/A'}</span>
                   </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-stone">Fare</span>
-                    <span className="font-medium text-navy font-mono font-bold">{ride.fare ? `${ride.fare} PKR` : 'N/A'}</span>
-                  </div>
                 </div>
-                <button className="btn btn-primary w-full" onClick={() => handleAccept(ride.id)}>
-                  Accept Ride
-                </button>
+
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone" />
+                    <input
+                      className="input pl-8 text-sm"
+                      type="number"
+                      min="50"
+                      step="10"
+                      placeholder="Your bid (PKR)"
+                      value={bidAmounts[ride.rideId] || ''}
+                      onChange={(e) => setBidAmounts((prev) => ({ ...prev, [ride.rideId]: e.target.value }))}
+                    />
+                  </div>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => handleBid(ride.rideId)}
+                    disabled={submittingBid === ride.rideId || !bidAmounts[ride.rideId]}
+                  >
+                    Bid
+                  </button>
+                </div>
               </div>
             ))}
           </div>

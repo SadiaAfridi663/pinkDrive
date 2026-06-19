@@ -352,9 +352,18 @@ exports.getMe = catchAsync(async (req, res, next) => {
     return next(new AppError('User not found.', 404));
   }
 
+  // Refresh the cookie and return a fresh token for socket auth
+  const token = signToken(user);
+  res.cookie('token', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
+
   res.status(200).json({
     success: true,
-    data: { user },
+    data: { user, token },
   });
 });
 

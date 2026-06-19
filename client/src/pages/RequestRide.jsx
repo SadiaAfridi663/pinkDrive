@@ -7,8 +7,6 @@ import SelfieCapture from '../components/SelfieCapture';
 import LocationGate from '../components/LocationGate';
 import useGeolocation from '../hooks/useGeolocation';
 
-const FARE_PER_KM = 50;
-
 function RequestRideInner() {
   const [pickup, setPickup] = useState(null);
   const [dropoff, setDropoff] = useState(null);
@@ -19,6 +17,7 @@ function RequestRideInner() {
   const [serviceAreas, setServiceAreas] = useState([]);
   const [stripeConfigured, setStripeConfigured] = useState(true);
   const [walletBalance, setWalletBalance] = useState(null);
+  const [passengerOffer, setPassengerOffer] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -91,6 +90,14 @@ function RequestRideInner() {
       setError('Please capture a selfie before requesting a ride.');
       return;
     }
+    if (!passengerOffer || parseFloat(passengerOffer) <= 0) {
+      setError('Please enter your offer amount.');
+      return;
+    }
+    if (paymentMethod === 'wallet' && walletBalance !== null && parseFloat(passengerOffer) > walletBalance) {
+      setError(`Your offer (${parseFloat(passengerOffer).toFixed(0)} PKR) exceeds your wallet balance (${walletBalance.toFixed(0)} PKR). Please lower your offer or top up your wallet.`);
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -105,9 +112,10 @@ function RequestRideInner() {
         dropoffLng: dropoff.lng,
         selfiePath: selfieRes.data.data.selfiePath,
         paymentMethod,
+        passengerOffer: parseFloat(passengerOffer),
       });
 
-      navigate('/ride/active');
+      navigate(`/ride/bidding/${rideRes.data.data.ride.id}`);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to create ride.');
     } finally {
@@ -228,12 +236,14 @@ function RequestRideInner() {
                 <span className="text-text-muted">Distance</span>
                 <span className="font-medium text-plum font-mono">{distance ? `${distance} km` : 'N/A'}</span>
               </div>
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-text-muted">Fare</span>
-                <span className="font-medium text-plum font-mono font-bold text-plum">
-                  {fare ? `${fare} PKR` : 'N/A'}
-                </span>
-              </div>
+            </div>
+            <div className="mb-4">
+              <label className="label text-sm font-semibold">Your Offer (PKR)</label>
+              <p className="text-xs text-text-muted mb-2">Set the amount you're willing to pay. Nearby drivers will bid on your ride.</p>
+              <input className="input text-lg font-mono font-bold text-center" type="number" min="50" step="10" placeholder="e.g. 500" value={passengerOffer} onChange={(e) => setPassengerOffer(e.target.value)} />
+              {paymentMethod === 'wallet' && walletBalance !== null && passengerOffer && parseFloat(passengerOffer) > walletBalance && (
+                <p className="text-xs text-error mt-1">Exceeds wallet balance ({walletBalance.toFixed(0)} PKR). Top up or choose cash.</p>
+              )}
             </div>
           </div>
 
@@ -304,8 +314,8 @@ function RequestRideInner() {
 
           <div className="flex gap-2 mt-6">
             <button className="bg-transparent border-2 border-border text-text-muted hover:border-pink hover:text-pink inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm rounded-sm px-5 py-2.5 cursor-pointer transition flex-1" onClick={() => setStep('selfie')}>Back</button>
-            <button className="inline-flex items-center btn-primary justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none flex-1" onClick={handleSubmit} disabled={loading || !pickup || !dropoff || !selfieDataUrl}>
-              {loading ? 'Requesting...' : 'Request Ride'}
+            <button className="inline-flex items-center btn-primary justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none flex-1" onClick={handleSubmit} disabled={loading || !pickup || !dropoff || !selfieDataUrl || !passengerOffer || (paymentMethod === 'wallet' && walletBalance !== null && parseFloat(passengerOffer) > walletBalance)}>
+              {loading ? 'Requesting...' : (paymentMethod === 'wallet' && walletBalance !== null && passengerOffer && parseFloat(passengerOffer) > walletBalance) ? 'Insufficient Wallet' : 'Request Ride'}
             </button>
           </div>
         </div>

@@ -1,6 +1,7 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import { AuthContext } from './AuthContext';
+import logger from '../utils/logger';
 
 const SOCKET_URL = import.meta.env.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace('/api', '')
@@ -10,39 +11,51 @@ const SocketContext = createContext(null);
 
 function SocketProvider({ children }) {
   const { user, token } = useContext(AuthContext);
-  const socketRef = useRef(null);
+  const [socket, setSocket] = useState(null);
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
     if (!user || !token) {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
+      if (socket) {
+        logger.info('[Socket] Logging out, disconnecting socket');
+        socket.disconnect();
+        setSocket(null);
         setConnected(false);
       }
       return;
     }
 
-    const socket = io(SOCKET_URL, {
+    logger.info('[Socket] Creating new socket connection');
+    const newSocket = io(SOCKET_URL, {
       auth: { token },
       reconnection: true,
       reconnectionDelay: 2000,
     });
 
-    socket.on('connect', () => setConnected(true));
-    socket.on('disconnect', () => setConnected(false));
+    newSocket.on('connect', () => {
+      logger.info(`[Socket] Connected: ${newSocket.id}`);
+      setConnected(true);
+    });
+    newSocket.on('disconnect', (reason) => {
+      logger.info(`[Socket] Disconnected: ${reason}`);
+      setConnected(false);
+    });
+    newSocket.on('connect_error', (err) => {
+      logger.error(`[Socket] Connection error: ${err.message}`);
+    });
 
-    socketRef.current = socket;
+    setSocket(newSocket);
 
     return () => {
-      socket.disconnect();
-      socketRef.current = null;
+      logger.info('[Socket] Cleaning up socket');
+      newSocket.disconnect();
+      setSocket(null);
       setConnected(false);
     };
   }, [user, token]);
 
   return (
-    <SocketContext.Provider value={{ socket: socketRef.current, connected }}>
+    <SocketContext.Provider value={{ socket, connected }}>
       {children}
     </SocketContext.Provider>
   );
