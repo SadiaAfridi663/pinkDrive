@@ -74,11 +74,6 @@ function WalletPage() {
 
   return (
     <div className="page">
-      <div className="page-header page-header-accent">
-        <h1>Wallet</h1>
-        <p>Manage your balance and transactions</p>
-      </div>
-
       {error && <p className="msg msg-error">{error}</p>}
       {message && <p className="msg msg-success">{message}</p>}
 

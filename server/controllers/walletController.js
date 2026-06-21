@@ -6,6 +6,7 @@ const Ride = require('../models/Ride');
 const AppError = require('../utils/AppError');
 const catchAsync = require('../utils/catchAsync');
 const logger = require('../utils/logger');
+const { settleCommission } = require('../utils/commission');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 exports.getWallet = catchAsync(async (req, res) => {
@@ -57,6 +58,14 @@ exports.confirmTopup = catchAsync(async (req, res, next) => {
   const { session_id } = req.body;
   if (!session_id) return next(new AppError('Session ID is required.', 400));
 
+  // Prevent duplicate processing — check if this session was already confirmed
+  const existing = await Transaction.findOne({
+    where: { referenceId: session_id, type: 'topup' },
+  });
+  if (existing) {
+    return res.status(200).json({ success: true, data: { alreadyProcessed: true }, message: 'Top-up already processed.' });
+  }
+
   let wallet = await Wallet.findOne({ where: { userId: req.user.id } });
   if (!wallet) return next(new AppError('Wallet not found.', 404));
 
@@ -64,7 +73,7 @@ exports.confirmTopup = catchAsync(async (req, res, next) => {
     const session = await stripe.checkout.sessions.retrieve(session_id);
     if (session.payment_status === 'paid') {
       const amount = parseFloat(session.amount_total) / 100;
-      wallet.balance = parseFloat(wallet.balance) + amount;
+      wallet.balance = Math.round((parseFloat(wallet.balance) + amount) * 100) / 100;
       wallet.pendingTopupSessionId = null;
       wallet.pendingTopupAmount = null;
       await wallet.save();
@@ -74,11 +83,24 @@ exports.confirmTopup = catchAsync(async (req, res, next) => {
         type: 'topup',
         amount,
         direction: 'credit',
-        description: `Wallet top-up via Stripe`,
+        description: 'Wallet top-up via Stripe',
         referenceId: session_id,
         referenceType: 'stripe_session',
         status: 'completed',
       });
+
+      const settled = await settleCommission(wallet);
+      if (settled > 0) {
+        await Transaction.create({
+          userId: req.user.id,
+          type: 'commission_settlement',
+          amount: settled,
+          direction: 'debit',
+          description: `Auto commission settlement (${settled} PKR)`,
+          status: 'completed',
+        });
+        logger.info(`Auto-settled ${settled} PKR commission for user ${req.user.email} after top-up`);
+      }
 
       logger.info(`Wallet top-up of ${amount} PKR for user ${req.user.email}`);
       return res.status(200).json({ success: true, data: { wallet }, message: 'Wallet topped up.' });
@@ -129,19 +151,27 @@ exports.getDriverEarnings = catchAsync(async (req, res) => {
 });
 
 exports.getWithdrawableBalance = catchAsync(async (req, res) => {
-  const totalEarnings = await Transaction.sum('amount', {
-    where: { userId: req.user.id, type: 'ride_earnings', direction: 'credit' },
-  }) || 0;
+  let wallet = await Wallet.findOne({ where: { userId: req.user.id } });
+  if (!wallet) {
+    wallet = await Wallet.create({ userId: req.user.id, balance: 0, commissionDue: 0, totalEarnings: 0, totalWithdrawn: 0 });
+  }
 
   const pendingWithdrawals = await WithdrawalRequest.sum('amount', {
     where: { userId: req.user.id, status: 'pending' },
   }) || 0;
 
-  const withdrawable = Math.max(0, parseFloat(totalEarnings) - parseFloat(pendingWithdrawals));
+  const withdrawable = Math.max(0, parseFloat(wallet.balance) - parseFloat(pendingWithdrawals));
 
   res.status(200).json({
     success: true,
-    data: { totalEarnings: parseFloat(totalEarnings), pendingWithdrawals: parseFloat(pendingWithdrawals), withdrawable },
+    data: {
+      walletBalance: parseFloat(wallet.balance),
+      commissionDue: parseFloat(wallet.commissionDue),
+      totalEarnings: parseFloat(wallet.totalEarnings),
+      totalWithdrawn: parseFloat(wallet.totalWithdrawn),
+      pendingWithdrawals: parseFloat(pendingWithdrawals),
+      withdrawable,
+    },
   });
 });
 
@@ -153,15 +183,16 @@ exports.requestWithdrawal = catchAsync(async (req, res, next) => {
   }
   if (!accountDetails) return next(new AppError('Account details are required.', 400));
 
-  const totalEarnings = await Transaction.sum('amount', {
-    where: { userId: req.user.id, type: 'ride_earnings', direction: 'credit' },
-  }) || 0;
+  let wallet = await Wallet.findOne({ where: { userId: req.user.id } });
+  if (!wallet) {
+    wallet = await Wallet.create({ userId: req.user.id, balance: 0, commissionDue: 0, totalEarnings: 0, totalWithdrawn: 0 });
+  }
 
   const pendingWithdrawals = await WithdrawalRequest.sum('amount', {
     where: { userId: req.user.id, status: 'pending' },
   }) || 0;
 
-  const withdrawable = parseFloat(totalEarnings) - parseFloat(pendingWithdrawals);
+  const withdrawable = Math.max(0, parseFloat(wallet.balance) - parseFloat(pendingWithdrawals));
   if (parseFloat(amount) > withdrawable) {
     return next(new AppError(`Insufficient withdrawable balance. Available: ${withdrawable.toFixed(2)}`, 400));
   }

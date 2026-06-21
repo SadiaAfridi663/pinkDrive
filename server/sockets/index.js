@@ -7,7 +7,7 @@ const Bid = require('../models/Bid');
 const { haversineDistance } = require('../utils/geo');
 
 const onlineDrivers = {};
-const BID_TTL_MS = 30000;
+const BID_TTL_MS = 10000;
 const bidTimers = {};
 
 let _io = null;
@@ -41,7 +41,7 @@ function setupSocketHandlers(io) {
     }
 
     socket.on('driver:ready', async () => {
-      if (socket.user.role !== 'driver') return;
+      if (socket.user.role !== 'driver' || !socket.user.isDriverVerified) return;
       try {
         const pendingRides = await Ride.findAll({
           where: { status: 'pending', driverId: null },
@@ -155,6 +155,10 @@ function setupSocketHandlers(io) {
     // Driver submits a bid on a ride
     socket.on('driver:offer', async (data) => {
       if (socket.user.role !== 'driver') return;
+      if (!socket.user.isDriverVerified) {
+        socket.emit('offer:error', { message: 'Your driver account has not been verified yet.' });
+        return;
+      }
       const { rideId, amount } = data;
       if (!rideId || !amount || amount <= 0) {
         socket.emit('offer:error', { message: 'Invalid bid amount.' });
@@ -176,6 +180,14 @@ function setupSocketHandlers(io) {
         });
         if (activeDriverRide) {
           socket.emit('offer:error', { message: 'You already have an active ride.' });
+          return;
+        }
+
+        const Wallet = require('../models/Wallet');
+        const { isDebtLocked, MAX_COMMISSION_DEBT } = require('../utils/commission');
+        const driverWallet = await Wallet.findOne({ where: { userId: socket.user.id } });
+        if (driverWallet && isDebtLocked(driverWallet)) {
+          socket.emit('offer:error', { message: `Your account has outstanding commission dues of ${parseFloat(driverWallet.commissionDue).toFixed(0)} PKR. Please recharge your wallet to continue receiving rides.` });
           return;
         }
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Car, DollarSign } from 'lucide-react';
+import { Radar, DollarSign } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import AddressLabel from '../components/AddressLabel';
 import { rideAPI } from '../services/api';
 import { useSocket } from '../context/SocketContext';
 import RideRouteMap from '../components/RideRouteMap';
@@ -239,25 +240,15 @@ function DriverRidesInner() {
     setError('');
     socket.emit('driver:offer', { rideId, amount });
     setAvailableRides((prev) => prev.filter((r) => r.rideId !== rideId));
-    setMessage(`Bid of ${amount} PKR submitted. Waiting for passenger response.`);
     setTimeout(() => setSubmittingBid(null), 1000);
   };
 
   useEffect(() => {
     if (!socket) return;
-    const handler = (data) => setMessage(`Offer of ${data.amount} PKR sent successfully!`);
     const errHandler = (data) => setError(data.message || 'Bid failed.');
-    const expiredHandler = () => {
-      setMessage('Your offer has expired. The passenger did not respond in time.');
-      fetchData();
-    };
-    socket.on('offer:sent', handler);
     socket.on('offer:error', errHandler);
-    socket.on('offer:expired', expiredHandler);
     return () => {
-      socket.off('offer:sent', handler);
       socket.off('offer:error', errHandler);
-      socket.off('offer:expired', expiredHandler);
     };
   }, [socket]);
 
@@ -364,11 +355,11 @@ function DriverRidesInner() {
               </div>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-stone">Pickup</span>
-                <span className="font-medium text-navy font-mono">{activeRide.pickupAddress || `${activeRide.pickupLat?.toFixed(4)}, ${activeRide.pickupLng?.toFixed(4)}`}</span>
+                <span className="font-medium text-navy font-mono"><AddressLabel address={activeRide.pickupAddress} lat={activeRide.pickupLat} lng={activeRide.pickupLng} /></span>
               </div>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-stone">Drop-off</span>
-                <span className="font-medium text-navy font-mono">{activeRide.dropoffAddress || `${activeRide.dropoffLat?.toFixed(4)}, ${activeRide.dropoffLng?.toFixed(4)}`}</span>
+                <span className="font-medium text-navy font-mono"><AddressLabel address={activeRide.dropoffAddress} lat={activeRide.dropoffLat} lng={activeRide.dropoffLng} /></span>
               </div>
               {activeRide.distance && (
                 <div className="flex justify-between items-center text-sm">
@@ -490,7 +481,7 @@ function DriverRidesInner() {
 
         {availableRides.length === 0 ? (
           <div className="text-center p-12 mt-0">
-            <Car className="w-9 h-9 mx-auto" />
+            <Radar className="w-9 h-9 mx-auto" />
             <h3 className="font-display text-[1.2rem] font-semibold text-navy m-0 mb-1">No ride requests</h3>
             <p className="text-sm text-stone m-0">Waiting for passengers to request rides nearby.</p>
           </div>
@@ -511,11 +502,11 @@ function DriverRidesInner() {
                 <div className="flex flex-col gap-2 mb-4">
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-stone">Pickup</span>
-                    <span className="font-medium text-navy font-mono text-right">{ride.pickupAddress || `${ride.pickupLat?.toFixed(4)}, ${ride.pickupLng?.toFixed(4)}`}</span>
+                    <span className="font-medium text-navy font-mono text-right"><AddressLabel address={ride.pickupAddress} lat={ride.pickupLat} lng={ride.pickupLng} /></span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-stone">Drop-off</span>
-                    <span className="font-medium text-navy font-mono text-right">{ride.dropoffAddress || `${ride.dropoffLat?.toFixed(4)}, ${ride.dropoffLng?.toFixed(4)}`}</span>
+                    <span className="font-medium text-navy font-mono text-right"><AddressLabel address={ride.dropoffAddress} lat={ride.dropoffLat} lng={ride.dropoffLng} /></span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-stone">Distance</span>
@@ -558,7 +549,7 @@ function DriverRidesInner() {
               <div key={r.id} className="flex items-center justify-between px-4 py-3 card-list card-list-hover" onClick={() => navigate(`/ride/${r.id}`)}>
                 <div className="flex flex-col gap-0.5">
                   <span className="text-sm font-medium text-navy">
-                    {r.passenger ? `${r.passenger.name} · ` : ''}{r.pickupAddress || `${r.pickupLat?.toFixed(2)}, ${r.pickupLng?.toFixed(2)}`} &rarr; {r.dropoffAddress || `${r.dropoffLat?.toFixed(2)}, ${r.dropoffLng?.toFixed(2)}`}
+                    {r.passenger ? `${r.passenger.name} · ` : ''}<AddressLabel address={r.pickupAddress} lat={r.pickupLat} lng={r.pickupLng} /> &rarr; <AddressLabel address={r.dropoffAddress} lat={r.dropoffLat} lng={r.dropoffLng} />
                   </span>
                   <span className="text-xs text-stone-light">
                     {r.distance ? `${r.distance} km · ` : ''}{r.fare ? `${r.fare} PKR · ` : ''}{new Date(r.createdAt).toLocaleDateString()}

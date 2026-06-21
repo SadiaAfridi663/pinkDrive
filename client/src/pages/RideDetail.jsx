@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import AddressLabel from '../components/AddressLabel';
 import { rideAPI } from '../services/api';
 import RideRouteMap from '../components/RideRouteMap';
 
@@ -127,11 +128,11 @@ function RideDetail() {
         <div className="flex flex-col gap-2 mb-4">
           <div className="flex justify-between items-center text-sm">
             <span className="text-stone">Pickup</span>
-            <span className="font-medium text-navy font-mono">{ride.pickupAddress || `${ride.pickupLat?.toFixed(4)}, ${ride.pickupLng?.toFixed(4)}`}</span>
+            <span className="font-medium text-navy font-mono"><AddressLabel address={ride.pickupAddress} lat={ride.pickupLat} lng={ride.pickupLng} /></span>
           </div>
           <div className="flex justify-between items-center text-sm">
             <span className="text-stone">Drop-off</span>
-            <span className="font-medium text-navy font-mono">{ride.dropoffAddress || `${ride.dropoffLat?.toFixed(4)}, ${ride.dropoffLng?.toFixed(4)}`}</span>
+            <span className="font-medium text-navy font-mono"><AddressLabel address={ride.dropoffAddress} lat={ride.dropoffLat} lng={ride.dropoffLng} /></span>
           </div>
           {ride.distance && (
             <div className="flex justify-between items-center text-sm">

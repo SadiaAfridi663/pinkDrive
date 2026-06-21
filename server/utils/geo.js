@@ -71,4 +71,19 @@ function isPointInPolygon(lat, lng, polygon) {
   return inside;
 }
 
-module.exports = { reverseGeocode, reverseGeocodeBoth, haversineDistance, fileToUrl, isPointInPolygon };
+async function hydrateRideAddresses(ride) {
+  if (!ride) return ride;
+  try {
+    if (!ride.pickupAddress && ride.pickupLat != null) {
+      ride.pickupAddress = await reverseGeocode(ride.pickupLat, ride.pickupLng);
+      if (ride.pickupAddress && typeof ride.save === 'function') await ride.save();
+    }
+    if (!ride.dropoffAddress && ride.dropoffLat != null) {
+      ride.dropoffAddress = await reverseGeocode(ride.dropoffLat, ride.dropoffLng);
+      if (ride.dropoffAddress && typeof ride.save === 'function') await ride.save();
+    }
+  } catch { /* best-effort */ }
+  return ride;
+}
+
+module.exports = { reverseGeocode, reverseGeocodeBoth, haversineDistance, fileToUrl, isPointInPolygon, hydrateRideAddresses };

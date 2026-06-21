@@ -1,6 +1,7 @@
 import { useState, useEffect, useContext, useCallback, useRef, useMemo } from 'react';
-import { Car } from 'lucide-react';
+import { Navigation } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import AddressLabel from '../components/AddressLabel';
 import { rideAPI, sosAPI, paymentsAPI } from '../services/api';
 import { AuthContext } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -37,7 +38,7 @@ function ActiveRide() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { fetchRide(); const i = setInterval(fetchRide, 5000); return () => clearInterval(i); }, [fetchRide]);
+  useEffect(() => { fetchRide(); }, [fetchRide]);
 
   const passengerLocation = position && user?.role === 'passenger' ? position : null;
 
@@ -46,9 +47,16 @@ function ActiveRide() {
     socket.emit('join:ride', ride.id);
     const locHandler = (loc) => setDriverLocation(loc);
     const statusHandler = () => fetchRide();
+    const connectHandler = () => fetchRide();
     socket.on('driver:location', locHandler);
     socket.on('ride:status', statusHandler);
-    return () => { socket.emit('leave:ride', ride.id); socket.off('driver:location', locHandler); socket.off('ride:status', statusHandler); };
+    socket.on('connect', connectHandler);
+    return () => {
+      socket.emit('leave:ride', ride.id);
+      socket.off('driver:location', locHandler);
+      socket.off('ride:status', statusHandler);
+      socket.off('connect', connectHandler);
+    };
   }, [socket, ride?.id]);
 
   useEffect(() => {
@@ -109,7 +117,7 @@ function ActiveRide() {
       <div className="page">
         <div className="page-header"><h1>Active Ride</h1></div>
         <div className="empty-state mt-6">
-          <Car className="w-10 h-10 mx-auto" />
+          <Navigation className="w-10 h-10 mx-auto" />
           <h3>No active ride</h3>
           <p>You don't have an active ride right now.</p>
           {user?.role === 'passenger' && <button className="btn btn-primary mt-4" onClick={() => navigate('/ride/request')}>Request a Ride</button>}
@@ -162,11 +170,11 @@ function ActiveRide() {
         <div className="flex flex-col gap-2 mb-4">
           <div className="flex justify-between items-center text-sm">
             <span className="text-stone">Pickup</span>
-            <span className="font-medium text-navy font-mono">{ride.pickupAddress || `${ride.pickupLat?.toFixed(4)}, ${ride.pickupLng?.toFixed(4)}`}</span>
+            <span className="font-medium text-navy font-mono"><AddressLabel address={ride.pickupAddress} lat={ride.pickupLat} lng={ride.pickupLng} /></span>
           </div>
           <div className="flex justify-between items-center text-sm">
             <span className="text-stone">Drop-off</span>
-            <span className="font-medium text-navy font-mono">{ride.dropoffAddress || `${ride.dropoffLat?.toFixed(4)}, ${ride.dropoffLng?.toFixed(4)}`}</span>
+            <span className="font-medium text-navy font-mono"><AddressLabel address={ride.dropoffAddress} lat={ride.dropoffLat} lng={ride.dropoffLng} /></span>
           </div>
           {ride.distance && <div className="flex justify-between items-center text-sm"><span className="text-stone">Distance</span><span className="font-medium text-navy font-mono">{ride.distance} km</span></div>}
           {ride.fare > 0 && <div className="flex justify-between items-center text-sm"><span className="text-stone">Fare</span><span className="font-medium text-navy font-mono font-bold">{ride.fare} PKR</span></div>}

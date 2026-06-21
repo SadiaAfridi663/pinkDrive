@@ -17,6 +17,18 @@ const Wallet = sequelize.define('Wallet', {
     type: DataTypes.DECIMAL(10, 2),
     defaultValue: 0,
   },
+  commissionDue: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0,
+  },
+  totalEarnings: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0,
+  },
+  totalWithdrawn: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0,
+  },
 }, {
   timestamps: true,
   tableName: 'wallets',

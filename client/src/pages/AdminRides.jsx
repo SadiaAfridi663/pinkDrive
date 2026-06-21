@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminAPI } from '../services/api';
+import AddressLabel from '../components/AddressLabel';
 import Avatar from '../components/Avatar';
 
   const PAYMENT_STATUS_COLORS = {
@@ -121,8 +122,8 @@ function AdminRides() {
                       <span className="text-stone-light text-xs">Unassigned</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-stone max-w-[140px] truncate">{r.pickupAddress || `${r.pickupLat?.toFixed(4)}, ${r.pickupLng?.toFixed(4)}`}</td>
-                  <td className="px-4 py-3 text-stone max-w-[140px] truncate">{r.dropoffAddress || `${r.dropoffLat?.toFixed(4)}, ${r.dropoffLng?.toFixed(4)}`}</td>
+                  <td className="px-4 py-3 text-stone max-w-[140px] truncate"><AddressLabel address={r.pickupAddress} lat={r.pickupLat} lng={r.pickupLng} /></td>
+                  <td className="px-4 py-3 text-stone max-w-[140px] truncate"><AddressLabel address={r.dropoffAddress} lat={r.dropoffLat} lng={r.dropoffLng} /></td>
                   <td className="px-4 py-3 font-mono">{r.fare ? `${r.fare} PKR` : 'N/A'}</td>
                   <td className="px-4 py-3 capitalize text-navy">{r.paymentMethod || 'N/A'}</td>
                   <td className="px-4 py-3">

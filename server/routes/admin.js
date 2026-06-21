@@ -22,5 +22,9 @@ router.patch('/disputes/:id/resolve', adminController.resolveDispute);
 router.post('/debts/:id/clear', adminController.clearDebt);
 router.get('/withdrawals', adminController.getWithdrawals);
 router.patch('/withdrawals/:id', adminController.processWithdrawal);
+router.get('/wallets', adminController.getDriverWallets);
+router.get('/wallets/:id', adminController.getDriverWalletByUserId);
+router.post('/wallets/:id/settle-commission', adminController.settleCommissionManually);
+router.post('/wallets/:id/adjust', adminController.adjustWalletBalance);
 
 module.exports = router;

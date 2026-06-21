@@ -6,10 +6,15 @@ import RideRouteMap from '../components/RideRouteMap';
 import SelfieCapture from '../components/SelfieCapture';
 import LocationGate from '../components/LocationGate';
 import useGeolocation from '../hooks/useGeolocation';
+import { reverseGeocode } from '../utils/geocode';
+
+const FARE_PER_KM = 50;
 
 function RequestRideInner() {
   const [pickup, setPickup] = useState(null);
+  const [pickupAddress, setPickupAddress] = useState('');
   const [dropoff, setDropoff] = useState(null);
+  const [dropoffAddress, setDropoffAddress] = useState('');
   const [step, setStep] = useState('pickup');
   const [selfieDataUrl, setSelfieDataUrl] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState('cash');
@@ -108,8 +113,10 @@ function RequestRideInner() {
       const rideRes = await rideAPI.createRide({
         pickupLat: pickup.lat,
         pickupLng: pickup.lng,
+        pickupAddress: pickupAddress || `${pickup.lat.toFixed(4)}, ${pickup.lng.toFixed(4)}`,
         dropoffLat: dropoff.lat,
         dropoffLng: dropoff.lng,
+        dropoffAddress: dropoffAddress || `${dropoff.lat.toFixed(4)}, ${dropoff.lng.toFixed(4)}`,
         selfiePath: selfieRes.data.data.selfiePath,
         paymentMethod,
         passengerOffer: parseFloat(passengerOffer),
@@ -133,7 +140,7 @@ function RequestRideInner() {
   };
 
   return (
-    <div className="max-w-page mx-auto px-6 py-8 pb-16">
+    <div className="max-w-2xl w-full px-6 py-8 pb-16">
       <div className="mb-8">
         <h1 className="font-display text-[2.2rem] font-bold text-plum tracking-[-0.02em] leading-[1.15] m-0">Request a Ride</h1>
         <p className="text-[0.95rem] text-text-muted mt-1 m-0">Set your pickup, drop-off, and verify with selfie</p>
@@ -141,7 +148,7 @@ function RequestRideInner() {
 
       {error && <p className="bg-[#fff5f5] text-error border border-[#ffcdd2] px-3.5 py-2.5 rounded-sm text-sm mb-2">{error}</p>}
 
-      <div className="flex items-center justify-center gap-2 mb-6 text-xs">
+      <div className="flex items-start justify-start gap-2 mb-6 text-xs">
         <span className={stepClass('pickup')}>Pickup</span>
         <span className="text-text-light">&rarr;</span>
         <span className={stepClass('dropoff')}>Drop-off</span>
@@ -165,14 +172,17 @@ function RequestRideInner() {
           )}
           <MapLocationPicker
             label="Click on the map to set your pickup location"
-            onSelect={(pos) => setPickup(pos)}
+            onSelect={(pos) => {
+              setPickup(pos);
+              reverseGeocode(pos.lat, pos.lng).then(setPickupAddress);
+            }}
             initialPosition={pickup || position}
             userLocation={position}
             serviceAreas={serviceAreas}
           />
           {pickup && (
             <div className="mt-3">
-              <p className="text-xs text-text-muted mt-1.5 font-mono">Pickup: {pickup.lat.toFixed(4)}, {pickup.lng.toFixed(4)}</p>
+              <p className="text-xs text-text-muted mt-1.5 truncate max-w-full">{pickupAddress || `Pickup: ${pickup.lat.toFixed(4)}, ${pickup.lng.toFixed(4)}`}</p>
               <button className="inline-flex btn-primary items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none mt-2" onClick={() => setStep('dropoff')}>
                 Next: Set Drop-off
               </button>
@@ -185,16 +195,19 @@ function RequestRideInner() {
         <div>
           <MapLocationPicker
             label="Click on the map to set your drop-off location"
-            onSelect={(pos) => setDropoff(pos)}
+            onSelect={(pos) => {
+              setDropoff(pos);
+              reverseGeocode(pos.lat, pos.lng).then(setDropoffAddress);
+            }}
             initialPosition={dropoff || pickup || position}
             otherMarker={pickup}
             userLocation={position}
           />
           {dropoff && (
             <div className="mt-3">
-              <p className="text-xs text-text-muted mt-1.5 font-mono">
-                Drop-off: {dropoff.lat.toFixed(4)}, {dropoff.lng.toFixed(4)}
-                {distance && ` ${distance} km`}
+              <p className="text-xs text-text-muted mt-1.5 truncate max-w-full">
+                {dropoffAddress || `Drop-off: ${dropoff.lat.toFixed(4)}, ${dropoff.lng.toFixed(4)}`}
+                {distance && ` · ${distance} km`}
               </p>
               <div className="mt-3 rounded-sm overflow-hidden border-2 border-border">
                 <RideRouteMap pickup={pickup} dropoff={dropoff} nearbyDrivers={nearbyDrivers} height="220px" />
@@ -286,10 +299,10 @@ function RequestRideInner() {
 
           <div
             className={`flex-1 flex flex-col items-center gap-1 p-3 border-2 rounded-sm text-sm mb-2 ${fare && walletBalance !== null && walletBalance < fare
-                ? 'border-border bg-[#f9f9f9] text-text-light opacity-60 cursor-not-allowed'
-                : paymentMethod === 'wallet'
-                  ? 'border-pink bg-pink-subtle text-pink font-semibold cursor-pointer'
-                  : 'border-border text-text bg-off-white hover:border-pink cursor-pointer'
+              ? 'border-border bg-[#f9f9f9] text-text-light opacity-60 cursor-not-allowed'
+              : paymentMethod === 'wallet'
+                ? 'border-pink bg-pink-subtle text-pink font-semibold cursor-pointer'
+                : 'border-border text-text bg-off-white hover:border-pink cursor-pointer'
               }`}
             onClick={() => {
               if (!(fare && walletBalance !== null && walletBalance < fare)) {

@@ -67,13 +67,17 @@ function DriverWithdraw() {
       {success && <p className="msg msg-success">{success}</p>}
 
       {/* Balance summary */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-4 gap-3 mb-6">
         <div className="card p-4 text-center">
-          <p className="text-xs text-stone m-0 mb-1">Total Earnings</p>
-          <p className="text-lg font-bold font-mono text-navy m-0">{data?.totalEarnings?.toFixed(2) || '0.00'}</p>
+          <p className="text-xs text-stone m-0 mb-1">Wallet Balance</p>
+          <p className="text-lg font-bold font-mono text-success m-0">{data?.walletBalance?.toFixed(2) || '0.00'}</p>
         </div>
         <div className="card p-4 text-center">
-          <p className="text-xs text-stone m-0 mb-1">Pending</p>
+          <p className="text-xs text-stone m-0 mb-1">Commission Due</p>
+          <p className="text-lg font-bold font-mono text-warning m-0">{data?.commissionDue?.toFixed(2) || '0.00'}</p>
+        </div>
+        <div className="card p-4 text-center">
+          <p className="text-xs text-stone m-0 mb-1">Pending Withdrawals</p>
           <p className="text-lg font-bold font-mono text-warning m-0">{data?.pendingWithdrawals?.toFixed(2) || '0.00'}</p>
         </div>
         <div className="card p-4 text-center">

@@ -22,11 +22,15 @@ function useGeolocation() {
       return;
     }
 
+    requestedRef.current = true;
+
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setPosition(loc);
         setPermissionState(STATES.GRANTED);
         setError(null);
+        startWatching();
       },
       (err) => {
         if (err.code === err.PERMISSION_DENIED) {
@@ -38,7 +42,7 @@ function useGeolocation() {
           setError('Location request timed out.');
         }
       },
-      { enableHighAccuracy: true, timeout: 10000 },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 },
     );
   }, []);
 
@@ -53,7 +57,7 @@ function useGeolocation() {
         onPosition?.(loc);
       },
       () => {},
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 },
     );
   }, []);
 
@@ -68,7 +72,6 @@ function useGeolocation() {
     if (!navigator.permissions) {
       setResolved(true);
       if (navigator.geolocation && !requestedRef.current) {
-        requestedRef.current = true;
         request();
       }
       return;
@@ -76,14 +79,12 @@ function useGeolocation() {
     navigator.permissions.query({ name: 'geolocation' }).then((result) => {
       setPermissionState(result.state);
       setResolved(true);
-      if (result.state === 'granted' && !requestedRef.current) {
-        requestedRef.current = true;
+      if ((result.state === 'granted' || result.state === 'prompt') && !requestedRef.current) {
         request();
       }
       result.addEventListener('change', () => {
         setPermissionState(result.state);
-        if (result.state === 'granted' && !requestedRef.current) {
-          requestedRef.current = true;
+        if ((result.state === 'granted' || result.state === 'prompt') && !requestedRef.current) {
           request();
         }
       });

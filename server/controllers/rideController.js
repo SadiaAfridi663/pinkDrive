@@ -10,7 +10,7 @@ const Bid = require('../models/Bid');
 const AppError = require('../utils/AppError');
 const catchAsync = require('../utils/catchAsync');
 const logger = require('../utils/logger');
-const { reverseGeocodeBoth, haversineDistance, fileToUrl, isPointInPolygon } = require('../utils/geo');
+const { reverseGeocodeBoth, haversineDistance, fileToUrl, isPointInPolygon, hydrateRideAddresses } = require('../utils/geo');
 const ServiceArea = require('../models/ServiceArea');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { getOnlineDrivers, getIO } = require('../sockets');
@@ -194,6 +194,8 @@ exports.getActiveRide = catchAsync(async (req, res, next) => {
     return res.status(200).json({ success: true, data: { ride: null } });
   }
 
+  await hydrateRideAddresses(ride);
+
   let driver = null;
   if (ride.driverId) {
     driver = await User.findByPk(ride.driverId, {
@@ -225,6 +227,24 @@ exports.getActiveRide = catchAsync(async (req, res, next) => {
 });
 
 exports.getPendingRides = catchAsync(async (req, res, next) => {
+  const driver = await User.findByPk(req.user.id);
+  if (!driver.isDriverVerified) {
+    return next(new AppError('Your driver account has not been verified yet.', 403));
+  }
+
+  const { isDebtLocked, MAX_COMMISSION_DEBT } = require('../utils/commission');
+  const wallet = await Wallet.findOne({ where: { userId: req.user.id } });
+  if (wallet && isDebtLocked(wallet)) {
+    return res.status(200).json({
+      success: true,
+      data: {
+        rides: [],
+        blocked: true,
+        message: `Your account has outstanding commission dues of ${parseFloat(wallet.commissionDue).toFixed(0)} PKR. Please recharge your wallet to continue receiving rides.`,
+      },
+    });
+  }
+
   const rides = await Ride.findAll({
     where: { status: 'pending', driverId: null },
     order: [['createdAt', 'ASC']],
@@ -249,6 +269,12 @@ exports.acceptRide = catchAsync(async (req, res, next) => {
   const driver = await User.findByPk(req.user.id);
   if (!driver.isDriverVerified) {
     return next(new AppError('Your driver account has not been verified yet.', 403));
+  }
+
+  const { isDebtLocked } = require('../utils/commission');
+  const wallet = await Wallet.findOne({ where: { userId: req.user.id } });
+  if (wallet && isDebtLocked(wallet)) {
+    return next(new AppError(`Your account has outstanding commission dues of ${parseFloat(wallet.commissionDue).toFixed(0)} PKR. Please recharge your wallet to continue receiving rides.`, 403));
   }
 
   const ride = await Ride.findByPk(req.params.id);
@@ -330,96 +356,116 @@ exports.updateRideStatus = catchAsync(async (req, res, next) => {
   let targetStatus = status;
   let checkoutUrl = null;
 
-  if (status === 'completed' && ride.paymentMethod === 'cash') {
-    targetStatus = 'awaiting_payment';
-  }
+  const { sequelize } = require('../config/db.sql');
+  const { calculateCommission } = require('../utils/commission');
 
-  if (status === 'completed' && ride.paymentMethod === 'wallet') {
-    targetStatus = 'completed';
-    const passengerWallet = await Wallet.findOne({ where: { userId: ride.passengerId } });
-    if (passengerWallet && parseFloat(passengerWallet.balance) >= parseFloat(ride.fare)) {
-      passengerWallet.balance = parseFloat(passengerWallet.balance) - parseFloat(ride.fare);
-      await passengerWallet.save();
+  if (status === 'completed') {
+    const { platformFee, driverEarning } = calculateCommission(ride.fare);
+    ride.platformFee = platformFee;
+    ride.driverEarning = driverEarning;
 
-      await Transaction.create({
-        userId: ride.passengerId,
-        type: 'ride_payment',
-        amount: ride.fare,
-        direction: 'debit',
-        description: `Ride payment (${ride.id.slice(0, 8)}...)`,
-        referenceId: ride.id,
-        referenceType: 'ride',
-        status: 'completed',
-      });
+    if (ride.paymentMethod === 'cash') {
+      targetStatus = 'awaiting_payment';
+    }
 
-      if (ride.driverId) {
-        const driverWallet = await Wallet.findOne({ where: { userId: ride.driverId } });
-        if (driverWallet) {
-          driverWallet.balance = parseFloat(driverWallet.balance) + parseFloat(ride.fare);
-          await driverWallet.save();
+    if (ride.paymentMethod === 'wallet') {
+      targetStatus = 'completed';
+      const t = await sequelize.transaction();
+      try {
+        const passengerWallet = await Wallet.findOne({ where: { userId: ride.passengerId }, transaction: t });
+        if (passengerWallet && parseFloat(passengerWallet.balance) >= parseFloat(ride.fare)) {
+          passengerWallet.balance = Math.round((parseFloat(passengerWallet.balance) - parseFloat(ride.fare)) * 100) / 100;
+          await passengerWallet.save({ transaction: t });
+
+          await Transaction.create({
+            userId: ride.passengerId,
+            type: 'ride_payment',
+            amount: ride.fare,
+            direction: 'debit',
+            description: `Ride payment (${ride.id.slice(0, 8)}...)`,
+            referenceId: ride.id,
+            referenceType: 'ride',
+            rideId: ride.id,
+            status: 'completed',
+          }, { transaction: t });
+
+          if (ride.driverId) {
+            let driverWallet = await Wallet.findOne({ where: { userId: ride.driverId }, transaction: t });
+            if (!driverWallet) {
+              driverWallet = await Wallet.create({ userId: ride.driverId, balance: 0, commissionDue: 0, totalEarnings: 0, totalWithdrawn: 0 }, { transaction: t });
+            }
+            driverWallet.balance = Math.round((parseFloat(driverWallet.balance) + driverEarning) * 100) / 100;
+            driverWallet.totalEarnings = Math.round((parseFloat(driverWallet.totalEarnings) + driverEarning) * 100) / 100;
+            await driverWallet.save({ transaction: t });
+
+            await Transaction.create({
+              userId: ride.driverId,
+              type: 'ride_earnings',
+              amount: driverEarning,
+              direction: 'credit',
+              description: `Ride earnings (${ride.id.slice(0, 8)}...)`,
+              referenceId: ride.id,
+              referenceType: 'ride',
+              rideId: ride.id,
+              status: 'completed',
+            }, { transaction: t });
+          }
+
+          ride.paymentStatus = 'paid';
+          await t.commit();
+          logger.info(`Wallet payment processed for ride ${ride.id}: fare=${ride.fare}, fee=${platformFee}, driver=${driverEarning}`);
+          sendRideReceiptToPassenger(ride.id);
+          sendDriverRideCompleted(ride.id);
         } else {
-          await Wallet.create({ userId: ride.driverId, balance: parseFloat(ride.fare) });
+          await t.rollback();
+          targetStatus = 'payment_dispute';
+          await Dispute.create({
+            rideId: ride.id,
+            reportedBy: req.user.id,
+            disputeType: 'digital_payment_failure',
+            description: 'Insufficient wallet balance.',
+            status: 'open',
+          });
+          logger.warn(`Insufficient wallet balance for ride ${ride.id}`);
         }
-
-        await Transaction.create({
-          userId: ride.driverId,
-          type: 'ride_earnings',
-          amount: ride.fare,
-          direction: 'credit',
-          description: `Ride earnings (${ride.id.slice(0, 8)}...)`,
-          referenceId: ride.id,
-          referenceType: 'ride',
-          status: 'completed',
-        });
+      } catch (err) {
+        await t.rollback();
+        logger.error(`Wallet payment transaction failed for ride ${ride.id}:`, err.message);
+        return next(new AppError('Payment processing failed.', 500));
       }
-
-      ride.paymentStatus = 'paid';
-      logger.info(`Wallet payment processed for ride ${ride.id}: ${ride.fare} PKR`);
-      sendRideReceiptToPassenger(ride.id);
-      sendDriverRideCompleted(ride.id);
-    } else {
-      targetStatus = 'payment_dispute';
-      await Dispute.create({
-        rideId: ride.id,
-        reportedBy: req.user.id,
-        disputeType: 'digital_payment_failure',
-        description: 'Insufficient wallet balance.',
-        status: 'open',
-      });
-      logger.warn(`Insufficient wallet balance for ride ${ride.id}`);
     }
-  }
 
-  if (status === 'completed' && ride.paymentMethod === 'stripe') {
-    targetStatus = 'awaiting_payment';
-    try {
-      const amount = parseFloat(ride.fare);
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ['card'],
-        mode: 'payment',
-        client_reference_id: ride.id,
-        customer_email: req.user.email,
-        line_items: [{
-          price_data: {
-            currency: 'pkr',
-            product_data: { name: 'PinkDrive Ride', description: `${ride.pickupAddress || ''} → ${ride.dropoffAddress || ''}` },
-            unit_amount: Math.round(amount * 100),
-          },
-          quantity: 1,
-        }],
-        success_url: `${process.env.CLIENT_URL}/payment/result?session_id={CHECKOUT_SESSION_ID}&status=success`,
-        cancel_url: `${process.env.CLIENT_URL}/payment/result?status=cancelled`,
-      });
-      ride.stripeSessionId = session.id;
-      checkoutUrl = session.url;
-      logger.info(`Auto Stripe session created for completed ride ${ride.id}`);
-    } catch (err) {
-      logger.error(`Stripe auto-charge failed for ride ${ride.id}:`, err.message);
+    if (ride.paymentMethod === 'stripe') {
+      targetStatus = 'awaiting_payment';
+      try {
+        const amount = parseFloat(ride.fare);
+        const session = await stripe.checkout.sessions.create({
+          payment_method_types: ['card'],
+          mode: 'payment',
+          client_reference_id: ride.id,
+          customer_email: req.user.email,
+          line_items: [{
+            price_data: {
+              currency: 'pkr',
+              product_data: { name: 'PinkDrive Ride', description: `${ride.pickupAddress || ''} → ${ride.dropoffAddress || ''}` },
+              unit_amount: Math.round(amount * 100),
+            },
+            quantity: 1,
+          }],
+          success_url: `${process.env.CLIENT_URL}/payment/result?session_id={CHECKOUT_SESSION_ID}&status=success`,
+          cancel_url: `${process.env.CLIENT_URL}/payment/result?status=cancelled`,
+        });
+        ride.stripeSessionId = session.id;
+        checkoutUrl = session.url;
+        logger.info(`Auto Stripe session created for completed ride ${ride.id}`);
+      } catch (err) {
+        logger.error(`Stripe auto-charge failed for ride ${ride.id}:`, err.message);
+      }
     }
-  }
 
-  if (status === 'completed' && !['cash', 'wallet', 'stripe'].includes(ride.paymentMethod)) {
-    targetStatus = 'completed';
+    if (!['cash', 'wallet', 'stripe'].includes(ride.paymentMethod)) {
+      targetStatus = 'completed';
+    }
   }
 
   ride.status = targetStatus;
@@ -454,17 +500,51 @@ exports.confirmPayment = catchAsync(async (req, res, next) => {
     return next(new AppError('Ride is not awaiting payment confirmation.', 400));
   }
 
-  ride.paymentStatus = 'paid';
-  ride.status = 'completed';
-  ride.completedAt = new Date();
-  await ride.save();
+  const { sequelize } = require('../config/db.sql');
+  const { calculateCommission } = require('../utils/commission');
+  const { platformFee, driverEarning } = calculateCommission(ride.fare);
+
+  const t = await sequelize.transaction();
+  try {
+    ride.platformFee = platformFee;
+    ride.driverEarning = driverEarning;
+    ride.paymentStatus = 'paid';
+    ride.status = 'completed';
+    ride.completedAt = new Date();
+    await ride.save({ transaction: t });
+
+    if (ride.paymentMethod === 'cash' && ride.driverId) {
+      let driverWallet = await Wallet.findOne({ where: { userId: ride.driverId }, transaction: t });
+      if (!driverWallet) {
+        driverWallet = await Wallet.create({ userId: ride.driverId, balance: 0, commissionDue: 0, totalEarnings: 0, totalWithdrawn: 0 }, { transaction: t });
+      }
+      driverWallet.commissionDue = Math.round((parseFloat(driverWallet.commissionDue) + platformFee) * 100) / 100;
+      driverWallet.totalEarnings = Math.round((parseFloat(driverWallet.totalEarnings) + driverEarning) * 100) / 100;
+      await driverWallet.save({ transaction: t });
+
+      await Transaction.create({
+        userId: ride.driverId,
+        type: 'commission_charge',
+        amount: platformFee,
+        direction: 'debit',
+        description: `Commission on cash ride (${ride.id.slice(0, 8)}...)`,
+        rideId: ride.id,
+        status: 'completed',
+      }, { transaction: t });
+    }
+
+    await t.commit();
+    logger.info(`Cash payment confirmed for ride ${ride.id}: fare=${ride.fare}, fee=${platformFee}, driver=${driverEarning}`);
+  } catch (err) {
+    await t.rollback();
+    logger.error(`Cash payment confirmation failed for ride ${ride.id}:`, err.message);
+    return next(new AppError('Failed to process payment confirmation.', 500));
+  }
 
   const io = getIO();
   if (io) {
     io.to(`ride:${ride.id}`).emit('ride:status', { rideId: ride.id, status: 'completed' });
   }
-
-  logger.info(`Payment confirmed for ride ${ride.id} by driver ${req.user.email}`);
 
   sendRideReceiptToPassenger(ride.id);
   sendDriverRideCompleted(ride.id);
@@ -482,17 +562,51 @@ exports.acknowledgePayment = catchAsync(async (req, res, next) => {
     return next(new AppError('Ride is not awaiting payment confirmation.', 400));
   }
 
-  ride.paymentStatus = 'paid';
-  ride.status = 'completed';
-  ride.completedAt = new Date();
-  await ride.save();
+  const { sequelize } = require('../config/db.sql');
+  const { calculateCommission } = require('../utils/commission');
+  const { platformFee, driverEarning } = calculateCommission(ride.fare);
+
+  const t = await sequelize.transaction();
+  try {
+    ride.platformFee = platformFee;
+    ride.driverEarning = driverEarning;
+    ride.paymentStatus = 'paid';
+    ride.status = 'completed';
+    ride.completedAt = new Date();
+    await ride.save({ transaction: t });
+
+    if (ride.paymentMethod === 'cash' && ride.driverId) {
+      let driverWallet = await Wallet.findOne({ where: { userId: ride.driverId }, transaction: t });
+      if (!driverWallet) {
+        driverWallet = await Wallet.create({ userId: ride.driverId, balance: 0, commissionDue: 0, totalEarnings: 0, totalWithdrawn: 0 }, { transaction: t });
+      }
+      driverWallet.commissionDue = Math.round((parseFloat(driverWallet.commissionDue) + platformFee) * 100) / 100;
+      driverWallet.totalEarnings = Math.round((parseFloat(driverWallet.totalEarnings) + driverEarning) * 100) / 100;
+      await driverWallet.save({ transaction: t });
+
+      await Transaction.create({
+        userId: ride.driverId,
+        type: 'commission_charge',
+        amount: platformFee,
+        direction: 'debit',
+        description: `Commission on cash ride (${ride.id.slice(0, 8)}...)`,
+        rideId: ride.id,
+        status: 'completed',
+      }, { transaction: t });
+    }
+
+    await t.commit();
+    logger.info(`Cash payment acknowledged for ride ${ride.id}: fare=${ride.fare}, fee=${platformFee}, driver=${driverEarning}`);
+  } catch (err) {
+    await t.rollback();
+    logger.error(`Cash payment acknowledgement failed for ride ${ride.id}:`, err.message);
+    return next(new AppError('Failed to process payment acknowledgement.', 500));
+  }
 
   const io = getIO();
   if (io) {
     io.to(`ride:${ride.id}`).emit('ride:status', { rideId: ride.id, status: 'completed' });
   }
-
-  logger.info(`Payment acknowledged for ride ${ride.id} by passenger ${req.user.email}`);
 
   sendRideReceiptToPassenger(ride.id);
   sendDriverRideCompleted(ride.id);
@@ -691,6 +805,8 @@ exports.getRideById = catchAsync(async (req, res, next) => {
   if (ride.passengerId !== req.user.id && ride.driverId !== req.user.id) {
     return next(new AppError('Unauthorized.', 403));
   }
+
+  await hydrateRideAddresses(ride);
 
   let driver = null;
   let passenger = null;

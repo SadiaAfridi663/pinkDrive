@@ -70,6 +70,10 @@ export const adminAPI = {
   clearDebt: (id) => api.post(`/admin/debts/${id}/clear`),
   getWithdrawals: (params) => api.get('/admin/withdrawals', { params }),
   processWithdrawal: (id, data) => api.patch(`/admin/withdrawals/${id}`, data),
+  getDriverWallets: () => api.get('/admin/wallets'),
+  getDriverWalletById: (id) => api.get(`/admin/wallets/${id}`),
+  settleCommission: (id) => api.post(`/admin/wallets/${id}/settle-commission`),
+  adjustWallet: (id, data) => api.post(`/admin/wallets/${id}/adjust`, data),
 };
 
 export const rideAPI = {

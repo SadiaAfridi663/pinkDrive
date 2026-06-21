@@ -13,15 +13,18 @@ const logger = require('../utils/logger');
 const { fileToUrl } = require('../utils/geo');
 const WithdrawalRequest = require('../models/WithdrawalRequest');
 const { sendDisputeUpdate } = require('../services/receiptService');
+const { settleCommission } = require('../utils/commission');
 
 exports.getStats = catchAsync(async (req, res, next) => {
-  const [totalUsers, totalRides, totalRevenue, pendingVerifications, activeSOS, openDisputes] = await Promise.all([
+  const [totalUsers, totalRides, totalRevenue, pendingVerifications, activeSOS, openDisputes, totalCommission, totalCommissionDue] = await Promise.all([
     User.count(),
     Ride.count(),
     Ride.sum('fare', { where: { status: 'completed' } }) || 0,
     User.count({ where: { isDriverVerified: false, role: 'driver' } }),
     SOSAlert.count({ where: { status: 'active' } }),
     Dispute.count({ where: { status: ['open', 'under_review'] } }),
+    Ride.sum('platformFee', { where: { paymentStatus: 'paid' } }) || 0,
+    Wallet.sum('commissionDue') || 0,
   ]);
 
   const userBreakdown = await User.findAll({
@@ -46,6 +49,8 @@ exports.getStats = catchAsync(async (req, res, next) => {
         pendingVerifications,
         activeSOS,
         openDisputes,
+        totalCommission: parseFloat(totalCommission),
+        totalCommissionDue: parseFloat(totalCommissionDue),
       },
       userBreakdown,
       rideBreakdown,
@@ -577,7 +582,8 @@ exports.processWithdrawal = catchAsync(async (req, res, next) => {
     return next(new AppError('Insufficient wallet balance. Withdrawal rejected.', 400));
   }
 
-  wallet.balance = parseFloat(wallet.balance) - parseFloat(withdrawal.amount);
+  wallet.balance = Math.round((parseFloat(wallet.balance) - parseFloat(withdrawal.amount)) * 100) / 100;
+  wallet.totalWithdrawn = Math.round((parseFloat(wallet.totalWithdrawn) + parseFloat(withdrawal.amount)) * 100) / 100;
   await wallet.save();
 
   await Transaction.create({
@@ -599,4 +605,124 @@ exports.processWithdrawal = catchAsync(async (req, res, next) => {
   logger.info(`Withdrawal ${withdrawal.id} approved: ${withdrawal.amount} via ${withdrawal.method}`);
 
   res.status(200).json({ success: true, message: 'Withdrawal approved and processed.' });
+});
+
+exports.getDriverWallets = catchAsync(async (req, res) => {
+  const wallets = await Wallet.findAll({
+    include: [{
+      model: User,
+      attributes: ['id', 'name', 'email', 'phone'],
+      where: { role: 'driver' },
+    }],
+    order: [['updatedAt', 'DESC']],
+  });
+
+  const data = wallets.map((w) => {
+    const json = w.toJSON();
+    return {
+      ...json,
+      balance: parseFloat(json.balance),
+      commissionDue: parseFloat(json.commissionDue),
+      totalEarnings: parseFloat(json.totalEarnings),
+      totalWithdrawn: parseFloat(json.totalWithdrawn),
+    };
+  });
+
+  res.status(200).json({ success: true, data: { wallets: data } });
+});
+
+exports.getDriverWalletByUserId = catchAsync(async (req, res) => {
+  const wallet = await Wallet.findOne({
+    where: { userId: req.params.id },
+    include: [{
+      model: User,
+      attributes: ['id', 'name', 'email', 'phone'],
+    }],
+  });
+  if (!wallet) return next(new AppError('Wallet not found.', 404));
+
+  const json = wallet.toJSON();
+  json.balance = parseFloat(json.balance);
+  json.commissionDue = parseFloat(json.commissionDue);
+  json.totalEarnings = parseFloat(json.totalEarnings);
+  json.totalWithdrawn = parseFloat(json.totalWithdrawn);
+
+  const transactions = await Transaction.findAll({
+    where: { userId: req.params.id },
+    order: [['createdAt', 'DESC']],
+    limit: 50,
+  });
+
+  res.status(200).json({ success: true, data: { wallet: json, transactions } });
+});
+
+exports.settleCommissionManually = catchAsync(async (req, res, next) => {
+  const wallet = await Wallet.findOne({ where: { userId: req.params.id } });
+  if (!wallet) return next(new AppError('Wallet not found.', 404));
+
+  const settled = await settleCommission(wallet);
+  if (settled > 0) {
+    await Transaction.create({
+      userId: req.params.id,
+      type: 'commission_settlement',
+      amount: settled,
+      direction: 'debit',
+      description: `Manual commission settlement by admin (${settled} PKR)`,
+      status: 'completed',
+    });
+    logger.info(`Admin manually settled ${settled} PKR commission for user ${req.params.id}`);
+  }
+
+  const json = wallet.toJSON();
+  json.balance = parseFloat(json.balance);
+  json.commissionDue = parseFloat(json.commissionDue);
+
+  res.status(200).json({
+    success: true,
+    data: { wallet: json },
+    message: settled > 0 ? `Settled ${settled} PKR commission.` : 'No commission to settle.',
+  });
+});
+
+exports.adjustWalletBalance = catchAsync(async (req, res, next) => {
+  const { amount, type, reason } = req.body;
+  if (!amount || parseFloat(amount) <= 0) return next(new AppError('Valid amount is required.', 400));
+  if (!['credit', 'debit'].includes(type)) return next(new AppError('Type must be credit or debit.', 400));
+  if (!reason) return next(new AppError('Reason is required for adjustments.', 400));
+
+  const wallet = await Wallet.findOne({ where: { userId: req.params.id } });
+  if (!wallet) return next(new AppError('Wallet not found.', 404));
+
+  const parsedAmount = parseFloat(amount);
+  if (type === 'debit' && parseFloat(wallet.balance) < parsedAmount) {
+    return next(new AppError('Insufficient balance for debit.', 400));
+  }
+
+  if (type === 'credit') {
+    wallet.balance = Math.round((parseFloat(wallet.balance) + parsedAmount) * 100) / 100;
+  } else {
+    wallet.balance = Math.round((parseFloat(wallet.balance) - parsedAmount) * 100) / 100;
+  }
+  await wallet.save();
+
+  await Transaction.create({
+    userId: req.params.id,
+    type: 'adjustment',
+    amount: parsedAmount,
+    direction: type,
+    description: `Admin adjustment: ${reason}`,
+    status: 'completed',
+  });
+
+  logger.info(`Admin ${type} ${parsedAmount} PKR for wallet ${req.params.id}: ${reason}`);
+
+  const json = wallet.toJSON();
+  json.balance = parseFloat(json.balance);
+  json.commissionDue = parseFloat(json.commissionDue);
+
+  res.status(200).json({
+    success: true,
+    data: { wallet: json },
+    message: `Wallet ${type}ed ${parsedAmount} PKR.`,
+  });
 });

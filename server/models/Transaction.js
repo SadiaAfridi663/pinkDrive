@@ -16,7 +16,7 @@ const Transaction = sequelize.define('Transaction', {
     type: DataTypes.STRING,
     allowNull: false,
     validate: {
-      isIn: [['topup', 'ride_payment', 'ride_earnings', 'refund', 'payout', 'withdrawal']],
+      isIn: [['topup', 'ride_payment', 'ride_earnings', 'refund', 'payout', 'withdrawal', 'commission_charge', 'commission_settlement', 'adjustment']],
     },
   },
   amount: {
@@ -41,6 +41,11 @@ const Transaction = sequelize.define('Transaction', {
   referenceType: {
     type: DataTypes.STRING,
     allowNull: true,
+  },
+  rideId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: { model: 'rides', key: 'id' },
   },
   status: {
     type: DataTypes.STRING,

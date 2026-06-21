@@ -30,7 +30,7 @@ function Avatar({ name = '?', size = 'md', src, className = '' }) {
 
   return (
     <span
-      className={`${dim}  rounded-full flex items-center justify-center font-semibold text-white flex-shrink-0 ${className}`}
+      className={`${dim} rounded-full flex items-center justify-center font-semibold text-white flex-shrink-0 ${className}`}
       style={{ backgroundColor: bg }}
       title={name}
     >

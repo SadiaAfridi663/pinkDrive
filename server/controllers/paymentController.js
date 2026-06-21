@@ -8,18 +8,61 @@ const { getIO } = require('../sockets');
 const { sendRideReceiptToPassenger, sendDriverRideCompleted } = require('../services/receiptService');
 
 async function confirmRidePayment(rideId, stripeSessionId) {
+  const Ride = require('../models/Ride');
+  const Wallet = require('../models/Wallet');
+  const Transaction = require('../models/Transaction');
+  const { sequelize } = require('../config/db.sql');
+  const { calculateCommission } = require('../utils/commission');
+  const logger = require('../utils/logger');
+
   const ride = await Ride.findByPk(rideId);
   if (!ride || ride.paymentStatus === 'paid') return ride;
 
-  ride.paymentStatus = 'paid';
-  if (ride.status === 'awaiting_payment') {
-    ride.status = 'completed';
-    ride.completedAt = new Date();
-  }
-  if (stripeSessionId) ride.stripeSessionId = stripeSessionId;
-  await ride.save();
+  const { platformFee, driverEarning } = calculateCommission(ride.fare);
 
-  logger.info(`Payment confirmed for ride ${rideId}`);
+  const t = await sequelize.transaction();
+  try {
+    ride.platformFee = platformFee;
+    ride.driverEarning = driverEarning;
+    ride.paymentStatus = 'paid';
+    if (ride.status === 'awaiting_payment') {
+      ride.status = 'completed';
+      ride.completedAt = new Date();
+    }
+    if (stripeSessionId) ride.stripeSessionId = stripeSessionId;
+    await ride.save({ transaction: t });
+
+    if (ride.driverId) {
+      let driverWallet = await Wallet.findOne({ where: { userId: ride.driverId }, transaction: t });
+      if (!driverWallet) {
+        driverWallet = await Wallet.create({
+          userId: ride.driverId, balance: 0, commissionDue: 0, totalEarnings: 0, totalWithdrawn: 0,
+        }, { transaction: t });
+      }
+      driverWallet.balance = Math.round((parseFloat(driverWallet.balance) + driverEarning) * 100) / 100;
+      driverWallet.totalEarnings = Math.round((parseFloat(driverWallet.totalEarnings) + driverEarning) * 100) / 100;
+      await driverWallet.save({ transaction: t });
+
+      await Transaction.create({
+        userId: ride.driverId,
+        type: 'ride_earnings',
+        amount: driverEarning,
+        direction: 'credit',
+        description: `Ride earnings - Stripe (${ride.id.slice(0, 8)}...)`,
+        referenceId: ride.id,
+        referenceType: 'ride',
+        rideId: ride.id,
+        status: 'completed',
+      }, { transaction: t });
+    }
+
+    await t.commit();
+    logger.info(`Stripe payment confirmed for ride ${rideId}: fare=${ride.fare}, fee=${platformFee}, driver=${driverEarning}`);
+  } catch (err) {
+    await t.rollback();
+    logger.error(`Stripe payment confirmation failed for ride ${rideId}:`, err.message);
+    return ride;
+  }
 
   const io = getIO();
   if (io) {

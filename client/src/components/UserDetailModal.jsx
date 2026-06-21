@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Avatar from './Avatar';
+import ImagePreviewModal from './ImagePreviewModal';
 
 const API_URL = import.meta.env.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace('/api', '')
@@ -14,6 +15,7 @@ const getFileUrl = (filePath) => {
 
 function UserDetailModal({ user, documents, onClose, onSuspend }) {
   const overlayRef = useRef(null);
+  const [previewImage, setPreviewImage] = useState(null);
 
   useEffect(() => {
     const handler = (e) => {
@@ -49,11 +51,10 @@ function UserDetailModal({ user, documents, onClose, onSuspend }) {
             <div className="min-w-0">
               <p className="font-display text-[1.15rem] font-semibold text-plum m-0 leading-snug truncate">{user.name}</p>
               <p className="text-[0.85rem] text-stone m-0 mt-0.5 truncate">{user.email}</p>
-              <span className={`inline-block mt-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.05em] px-2 py-0.5 rounded-sm ${
-                user.role === 'admin' ? 'bg-[#fce4ec] text-pink' :
-                user.role === 'driver' ? 'bg-[#e3f2fd] text-[#1565c0]' :
-                'bg-[#f3e5f5] text-[#7b1fa2]'
-              }`}>{user.role}</span>
+              <span className={`inline-block mt-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.05em] px-2 py-0.5 rounded-sm ${user.role === 'admin' ? 'bg-[#fce4ec] text-pink' :
+                  user.role === 'driver' ? 'bg-[#e3f2fd] text-[#1565c0]' :
+                    'bg-[#f3e5f5] text-[#7b1fa2]'
+                }`}>{user.role}</span>
             </div>
           </div>
 
@@ -83,16 +84,13 @@ function UserDetailModal({ user, documents, onClose, onSuspend }) {
           <div>
             <p className="text-[0.65rem] font-semibold uppercase tracking-[0.06em] text-stone m-0 mb-2">Status</p>
             <div className="flex flex-wrap gap-1.5">
-              <span className={`inline-block text-[0.65rem] font-semibold px-2 py-1 rounded-sm ${
-                user.isVerified ? 'bg-[#e8f5e9] text-success' : 'bg-[#fff8e1] text-warning'
-              }`}>{user.isVerified ? 'Verified' : 'Unverified'}</span>
-              <span className={`inline-block text-[0.65rem] font-semibold px-2 py-1 rounded-sm ${
-                user.isSuspended ? 'bg-[#ffebee] text-error' : 'bg-[#e8f5e9] text-success'
-              }`}>{user.isSuspended ? 'Suspended' : 'Active'}</span>
+              <span className={`inline-block text-[0.65rem] font-semibold px-2 py-1 rounded-sm ${user.isVerified ? 'bg-[#e8f5e9] text-success' : 'bg-[#fff8e1] text-warning'
+                }`}>{user.isVerified ? 'Verified' : 'Unverified'}</span>
+              <span className={`inline-block text-[0.65rem] font-semibold px-2 py-1 rounded-sm ${user.isSuspended ? 'bg-[#ffebee] text-error' : 'bg-[#e8f5e9] text-success'
+                }`}>{user.isSuspended ? 'Suspended' : 'Active'}</span>
               {user.role === 'driver' && (
-                <span className={`inline-block text-[0.65rem] font-semibold px-2 py-1 rounded-sm ${
-                  user.isDriverVerified ? 'bg-[#e8f5e9] text-success' : 'bg-[#fff8e1] text-warning'
-                }`}>{user.isDriverVerified ? 'Driver Verified' : 'Driver Pending'}</span>
+                <span className={`inline-block text-[0.65rem] font-semibold px-2 py-1 rounded-sm ${user.isDriverVerified ? 'bg-[#e8f5e9] text-success' : 'bg-[#fff8e1] text-warning'
+                  }`}>{user.isDriverVerified ? 'Driver Verified' : 'Driver Pending'}</span>
               )}
             </div>
           </div>
@@ -105,16 +103,15 @@ function UserDetailModal({ user, documents, onClose, onSuspend }) {
                   <div key={doc.id} className="flex items-center justify-between bg-ivory rounded-sm px-3.5 py-2.5">
                     <span className="text-[0.82rem] text-charcoal">
                       {doc.documentType === 'license' ? "Driver's License" :
-                       doc.documentType === 'registration' ? 'Vehicle Registration' :
-                       doc.documentType === 'profile_photo' ? 'Profile Photo' : doc.documentType}
+                        doc.documentType === 'registration' ? 'Vehicle Registration' :
+                          doc.documentType === 'profile_photo' ? 'Profile Photo' : doc.documentType}
                     </span>
                     <div className="flex items-center gap-2">
-                      <span className={`text-[0.6rem] font-semibold uppercase tracking-[0.05em] px-1.5 py-0.5 rounded-sm ${
-                        doc.status === 'approved' ? 'bg-[#e8f5e9] text-success' :
-                        doc.status === 'rejected' ? 'bg-[#ffebee] text-error' :
-                        'bg-[#fff8e1] text-warning'
-                      }`}>{doc.status}</span>
-                      <a href={getFileUrl(doc.filePath)} target="_blank" rel="noopener noreferrer" className="text-[0.7rem] text-pink no-underline font-medium hover:underline">View</a>
+                      <span className={`text-[0.6rem] font-semibold uppercase tracking-[0.05em] px-1.5 py-0.5 rounded-sm ${doc.status === 'approved' ? 'bg-[#e8f5e9] text-success' :
+                          doc.status === 'rejected' ? 'bg-[#ffebee] text-error' :
+                            'bg-[#fff8e1] text-warning'
+                        }`}>{doc.status}</span>
+                      <button onClick={() => setPreviewImage({ url: getFileUrl(doc.filePath), label: doc.documentType === 'license' ? "Driver's License" : doc.documentType === 'registration' ? 'Vehicle Registration' : 'Profile Photo' })} className="text-[0.7rem] text-pink no-underline font-medium hover:underline bg-transparent border-none cursor-pointer">View</button>
                     </div>
                   </div>
                 ))}
@@ -129,11 +126,10 @@ function UserDetailModal({ user, documents, onClose, onSuspend }) {
               </button>
               <button
                 onClick={() => onSuspend(user.id, user.name)}
-                className={`flex-1 inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm border-2 rounded-sm px-4 py-2 cursor-pointer transition ${
-                  user.isSuspended
+                className={`flex-1 inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm border-2 rounded-sm px-4 py-2 cursor-pointer transition ${user.isSuspended
                     ? 'bg-transparent border-success text-success hover:bg-[#e8f5e9]'
                     : 'bg-transparent border-error text-error hover:bg-[#ffebee]'
-                }`}
+                  }`}
               >
                 {user.isSuspended ? 'Activate' : 'Suspend'}
               </button>
@@ -141,6 +137,14 @@ function UserDetailModal({ user, documents, onClose, onSuspend }) {
           )}
         </div>
       </div>
+
+      {previewImage && (
+        <ImagePreviewModal
+          images={[previewImage]}
+          currentIndex={0}
+          onClose={() => setPreviewImage(null)}
+        />
+      )}
     </div>
   );
 }

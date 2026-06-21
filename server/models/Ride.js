@@ -61,6 +61,14 @@ const Ride = sequelize.define('Ride', {
     type: DataTypes.DECIMAL(10, 2),
     defaultValue: 0,
   },
+  platformFee: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0,
+  },
+  driverEarning: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0,
+  },
   paymentMethod: {
     type: DataTypes.STRING,
     defaultValue: 'cash',
