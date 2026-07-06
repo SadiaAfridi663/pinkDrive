@@ -136,10 +136,36 @@ exports.createRide = catchAsync(async (req, res, next) => {
     }
   }
 
+  const SharedTrip = require('../models/SharedTrip');
+  const availableTrips = await SharedTrip.findAll({
+    where: { status: 'active', availableSeats: { [Op.gt]: 0 } },
+  });
+  const matchingTrips = [];
+  for (const trip of availableTrips) {
+    const { distanceToLineSegment } = require('../utils/geo');
+    const dist = distanceToLineSegment(pickupLat, pickupLng, trip.pickupLat, trip.pickupLng, trip.dropoffLat, trip.dropoffLng);
+    if (dist <= 5) {
+      const driver = await User.findByPk(trip.driverId, { attributes: ['id', 'name', 'profilePhoto'] });
+      matchingTrips.push({
+        tripId: trip.id,
+        driverName: driver?.name,
+        driverPhoto: driver?.profilePhoto ? fileToUrl(driver.profilePhoto) : null,
+        pickupAddress: trip.pickupAddress,
+        dropoffAddress: trip.dropoffAddress,
+        departureTime: trip.departureTime,
+        availableSeats: trip.availableSeats,
+        pricePerSeat: parseFloat(trip.pricePerSeat),
+        distanceToRoute: Math.round(dist * 100) / 100,
+      });
+    }
+  }
+
   res.status(201).json({
     success: true,
-    data: { ride },
-    message: 'Ride requested. Drivers will be notified.',
+    data: { ride, availableSharedTrips: matchingTrips },
+    message: matchingTrips.length > 0
+      ? 'Ride requested. Shared trips available along your route!'
+      : 'Ride requested. Drivers will be notified.',
   });
 });
 
@@ -290,6 +316,14 @@ exports.acceptRide = catchAsync(async (req, res, next) => {
   });
   if (active) {
     return next(new AppError('You already have an active ride.', 400));
+  }
+
+  const SharedTrip = require('../models/SharedTrip');
+  const activeTrip = await SharedTrip.findOne({
+    where: { driverId: req.user.id, status: { [Op.in]: ['active'] } },
+  });
+  if (activeTrip) {
+    return next(new AppError('You have an active shared trip. Complete or cancel it first.', 400));
   }
 
   const onlineDrivers = getOnlineDrivers();

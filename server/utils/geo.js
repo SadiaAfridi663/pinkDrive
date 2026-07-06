@@ -29,7 +29,6 @@ async function reverseGeocode(lat, lng) {
 
 async function reverseGeocodeBoth(pickupLat, pickupLng, dropoffLat, dropoffLng) {
   const pickup = await reverseGeocode(pickupLat, pickupLng);
-  // Nominatim rate limit: 1 req/sec — delay before second call
   await new Promise((r) => setTimeout(r, 1100));
   const dropoff = await reverseGeocode(dropoffLat, dropoffLng);
   return [pickup, dropoff];
@@ -45,6 +44,20 @@ function haversineDistance(lat1, lng1, lat2, lng2) {
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return Math.round(R * c * 100) / 100;
+}
+
+function distanceToLineSegment(lat, lng, lat1, lng1, lat2, lng2) {
+  const A = lat - lat1;
+  const B = lng - lng1;
+  const C = lat2 - lat1;
+  const D = lng2 - lng1;
+  const dot = A * C + B * D;
+  const lenSq = C * C + D * D;
+  let t = lenSq !== 0 ? dot / lenSq : -1;
+  t = Math.max(0, Math.min(1, t));
+  const closestLat = lat1 + t * C;
+  const closestLng = lng1 + t * D;
+  return haversineDistance(lat, lng, closestLat, closestLng);
 }
 
 function fileToUrl(filePath) {
@@ -86,4 +99,4 @@ async function hydrateRideAddresses(ride) {
   return ride;
 }
 
-module.exports = { reverseGeocode, reverseGeocodeBoth, haversineDistance, fileToUrl, isPointInPolygon, hydrateRideAddresses };
+module.exports = { reverseGeocode, reverseGeocodeBoth, haversineDistance, distanceToLineSegment, fileToUrl, isPointInPolygon, hydrateRideAddresses };

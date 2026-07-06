@@ -396,8 +396,34 @@ STRIPE_SECRET_KEY=sk_test_...
 - ✅ Geo-Fencing (Phase 5) — ServiceArea model, point-in-polygon validation, admin CRUD, passenger map display
 - ✅ SOS Emergency (Phase 6) — SOSAlert & EmergencyContact models, real-time admin alerts via Socket.io, passenger SOS button, emergency contact management
 
-### Pending
-- ~~Phase 5: Geo-Fencing~~ ✅ Done
-- ~~Phase 6: SOS Emergency Feature~~ ✅ Done
+### Phase 10 — Ride Sharing (Shared Trips)
+- [ ] **Model:** SharedTrip (driverId, pickup/dropoff, departureTime, seats, price/seat, paymentMethod) — PostgreSQL/Sequelize
+- [ ] **Model:** TripRequest (tripId, passengerId, pickup/dropoff, status, declineReason) — PostgreSQL/Sequelize
+- [ ] **Backend:** SharedTrip CRUD controller + routes
+- [ ] **Backend:** Route-corridor matching — shared trips suggested to passengers whose pickup lies near the driver's route
+- [ ] **Backend:** Driver mode lock — can't accept private rides while on a shared trip, vice versa
+- [ ] **Frontend:** Driver form — CreateSharedTrip.jsx (pickup, dropoff, date/time, seats, price, cash/wallet)
+- [ ] **Frontend:** Shared trip display in PassengerHub + RequestRide — shows available trips along passenger's route
+- [ ] **Frontend:** Driver incoming-request cards — Accept/Decline/View Profile buttons
+- [ ] **Frontend:** DeclineReasonModal
+- [ ] **Frontend:** Real-time seat count via WebSocket `trip:seats:update`
+
+### Phase 11 — Review System
+- [ ] **Model:** Review (rideId/tripRequestId, reviewerId, reviewedId, rating 1-5, comment) — PostgreSQL/Sequelize
+- [ ] **Backend:** Review controller + routes (submit, get driver reviews, get my reviews)
+- [ ] **Frontend:** ReviewModal — star rating + comment after ride completion
+- [ ] **Frontend:** Display average rating on driver profiles
+- [ ] **WebSocket:** `review:new` event to notify reviewed user
+
+### Phase 12 — Notification Panel
+- [ ] **Model:** Notification (userId, type, title, message, data JSONB, isRead) — PostgreSQL/Sequelize
+- [ ] **Backend:** Notification controller + routes (list, mark read, mark all read)
+- [ ] **Backend:** Create notifications on key events (ride status, trip request, review, SOS, verification)
+- [ ] **Frontend:** NotificationPanel — slide-out panel from header bell icon
+- [ ] **Frontend:** Refactor NotificationContext — remove all polling, pure WebSocket
+- [ ] **WebSocket:** `notification:new` event for real-time push
+- [ ] **Badge:** Unread count on bell icon updated via WebSocket
+
+### Pending (Original)
 - Phase 7: Stripe online payment integration
-- Phase 8: Admin Dashboard — ride monitoring, user management, geo-fence editor, analytics
+- Phase 9: Testing & Deployment

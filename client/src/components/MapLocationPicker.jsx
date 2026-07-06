@@ -21,7 +21,7 @@ const GREEN_ICON = new L.Icon({
   shadowSize: [41, 41],
 });
 
-function MapLocationPicker({ onSelect, label, initialPosition, otherMarker, userLocation, serviceAreas }) {
+function MapLocationPicker({ onSelect, label, initialPosition: rawPos, otherMarker, userLocation, serviceAreas }) {
   const mapRef = useRef(null);
   const markerRef = useRef(null);
   const otherMarkerRef = useRef(null);
@@ -30,6 +30,9 @@ function MapLocationPicker({ onSelect, label, initialPosition, otherMarker, user
   const pulseIntervalRef = useRef(null);
   const polygonLayersRef = useRef([]);
   const prevPosRef = useRef(null);
+  const initialPosition = rawPos
+    ? Array.isArray(rawPos) ? { lat: rawPos[0], lng: rawPos[1] } : rawPos
+    : null;
 
   useEffect(() => {
     if (mapRef.current) return;

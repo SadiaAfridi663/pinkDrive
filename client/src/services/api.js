@@ -136,4 +136,34 @@ export const sosAPI = {
   removeContact: (id) => api.delete(`/sos/contacts/${id}`),
 };
 
+export const sharedTripAPI = {
+  create: (data) => api.post('/shared-trips', data),
+  getAvailable: (lat, lng) => {
+    const params = {};
+    if (lat != null && lng != null) { params.lat = lat; params.lng = lng; }
+    return api.get('/shared-trips/available', { params });
+  },
+  getMyTrips: () => api.get('/shared-trips/my'),
+  getMyRequests: () => api.get('/shared-trips/requests/my'),
+  requestJoin: (tripId, data) => api.post(`/shared-trips/${tripId}/request`, data),
+  getTripRequests: (tripId) => api.get(`/shared-trips/${tripId}/requests`),
+  acceptRequest: (requestId) => api.patch(`/shared-trips/requests/${requestId}/accept`),
+  declineRequest: (requestId, reason) => api.patch(`/shared-trips/requests/${requestId}/decline`, { reason }),
+  cancelTrip: (tripId) => api.patch(`/shared-trips/${tripId}/cancel`),
+};
+
+export const reviewAPI = {
+  create: (data) => api.post('/reviews', data),
+  getDriverReviews: (driverId) => api.get(`/reviews/driver/${driverId}`),
+  getMyReviews: () => api.get('/reviews/my'),
+  getMyRatings: () => api.get('/reviews/my-ratings'),
+};
+
+export const notificationAPI = {
+  getAll: (params) => api.get('/notifications', { params }),
+  getUnreadCount: () => api.get('/notifications/unread-count'),
+  markAsRead: (id) => api.patch(`/notifications/${id}/read`),
+  markAllAsRead: () => api.post('/notifications/read-all'),
+};
+
 export default api;

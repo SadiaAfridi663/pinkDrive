@@ -31,6 +31,7 @@ function setupSocketHandlers(io) {
   io.on('connection', async (socket) => {
     logger.info(`Socket connected: ${socket.user.email} (${socket.user.role})`);
 
+    socket.join(`user:${socket.user.id}`);
     if (socket.user.role === 'admin') {
       socket.join('admin-room');
     }
@@ -251,6 +252,26 @@ function setupSocketHandlers(io) {
       const { bidId } = data;
       if (!bidId) return;
       socket.emit('accept:redirect', { bidId });
+    });
+
+    // Notifications — join driver/passenger rooms for targeted events
+    socket.on('join:user', () => {
+      socket.join(`user:${socket.user.id}`);
+    });
+
+    // Driver listening for trip requests
+    socket.on('trip:listen', () => {
+      if (socket.user.role === 'driver') {
+        socket.join(`driver:${socket.user.id}`);
+        logger.info(`Driver ${socket.user.email} listening for trip requests`);
+      }
+    });
+
+    // Passenger listening for trip updates
+    socket.on('trip:passenger:listen', () => {
+      if (socket.user.role === 'passenger') {
+        socket.join(`passenger:${socket.user.id}`);
+      }
     });
 
     socket.on('disconnect', () => {

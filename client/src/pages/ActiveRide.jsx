@@ -8,6 +8,7 @@ import { useSocket } from '../context/SocketContext';
 import RideRouteMap from '../components/RideRouteMap';
 import useGeolocation from '../hooks/useGeolocation';
 import { ToastContext } from '../context/ToastContext';
+import ReviewModal from '../components/ReviewModal';
 
 const API_URL = import.meta.env.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace('/api', '')
@@ -25,6 +26,7 @@ function ActiveRide() {
   const navigate = useNavigate();
   const toast = useContext(ToastContext);
   const watchStartedRef = useRef(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   const fetchRide = useCallback(async () => {
     try {
@@ -247,7 +249,33 @@ function ActiveRide() {
         {ride.status === 'pending' && (
           <button className="btn btn-danger btn-full" onClick={handleCancel}>Cancel Ride</button>
         )}
+
+        {ride.status === 'completed' && user?.role === 'passenger' && driver && (
+          <div className="mt-4 pt-4 border-t border-[#F0E0E8]">
+            <button
+              className="w-full bg-[#E91E8C] text-white font-bold py-3 rounded-xl hover:bg-[#C2185B] transition cursor-pointer border-none"
+              onClick={() => setReviewOpen(true)}
+            >
+              ⭐ Rate Your Driver
+            </button>
+          </div>
+        )}
+
+        {ride.status === 'completed' && user?.role === 'driver' && (
+          <div className="mt-4 pt-4 border-t border-[#F0E0E8] text-center">
+            <p className="text-sm text-[#8B8B9E] m-0">Ride completed successfully</p>
+          </div>
+        )}
       </div>
+
+      <ReviewModal
+        isOpen={reviewOpen}
+        onClose={() => setReviewOpen(false)}
+        rideId={ride.id}
+        reviewedId={driver?.id}
+        reviewedName={driver?.name}
+        onSubmit={() => setReviewOpen(false)}
+      />
     </div>
   );
 }

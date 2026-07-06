@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { rideAPI, serviceAreaAPI, paymentsAPI, walletAPI } from '../services/api';
+import { rideAPI, serviceAreaAPI, paymentsAPI, walletAPI, sharedTripAPI } from '../services/api';
 import MapLocationPicker from '../components/MapLocationPicker';
 import RideRouteMap from '../components/RideRouteMap';
+import AddressLabel from '../components/AddressLabel';
 import SelfieCapture from '../components/SelfieCapture';
 import LocationGate from '../components/LocationGate';
 import useGeolocation from '../hooks/useGeolocation';
@@ -25,6 +26,8 @@ function RequestRideInner() {
   const [passengerOffer, setPassengerOffer] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [sharedTrips, setSharedTrips] = useState([]);
+  const [loadingShared, setLoadingShared] = useState(false);
   const navigate = useNavigate();
   const { position } = useGeolocation();
 
@@ -83,6 +86,39 @@ function RequestRideInner() {
     fetch();
     return () => { cancelled = true; };
   }, [pickup]);
+
+  useEffect(() => {
+    if (!pickup || !dropoff) { setSharedTrips([]); return; }
+    let cancelled = false;
+    const fetch = async () => {
+      try {
+        const res = await sharedTripAPI.getAvailable(pickup.lat, pickup.lng);
+        if (!cancelled) setSharedTrips(res.data.data.trips || []);
+      } catch {
+        if (!cancelled) setSharedTrips([]);
+      }
+    };
+    fetch();
+    return () => { cancelled = true; };
+  }, [pickup, dropoff]);
+
+  const handleRequestJoin = async (tripId) => {
+    if (!pickup || !dropoff) return;
+    setLoading(true);
+    try {
+      await sharedTripAPI.requestJoin(tripId, {
+        pickupLat: pickup.lat,
+        pickupLng: pickup.lng,
+        dropoffLat: dropoff.lat,
+        dropoffLng: dropoff.lng,
+      });
+      navigate('/passenger');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to join shared trip.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSelfieCapture = useCallback((dataUrl) => setSelfieDataUrl(dataUrl), []);
 
@@ -212,9 +248,80 @@ function RequestRideInner() {
               <div className="mt-3 rounded-sm overflow-hidden border-2 border-border">
                 <RideRouteMap pickup={pickup} dropoff={dropoff} nearbyDrivers={nearbyDrivers} height="220px" />
               </div>
+
+              {sharedTrips.length > 0 && (
+                <div className="mt-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="h-0.5 flex-1 bg-gradient-to-r from-amber-200 to-amber-400 rounded-full" />
+                    <span className="text-[0.55rem] font-bold text-amber-600 uppercase tracking-widest whitespace-nowrap">
+                      Shared Trips Available Along Your Route
+                    </span>
+                    <div className="h-0.5 flex-1 bg-gradient-to-r from-amber-400 to-amber-200 rounded-full" />
+                  </div>
+                  <div className="space-y-3">
+                    {sharedTrips.map((trip) => (
+                      <div
+                        key={trip.tripId}
+                        className="bg-gradient-to-br from-amber-50 to-white rounded-xl border border-amber-200 p-4 hover:shadow-md hover:border-amber-300 transition-all cursor-pointer"
+                        onClick={() => handleRequestJoin(trip.tripId)}
+                      >
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-100 to-amber-200 flex items-center justify-center text-lg font-bold text-amber-600 flex-shrink-0 border-2 border-amber-300 overflow-hidden">
+                            {trip.driverPhoto ? (
+                              <img src={`${import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:5000'}/${trip.driverPhoto.replace(/\\/g, '/')}`} alt="" className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.textContent = trip.driverName?.[0] || 'D'; }} />
+                            ) : (
+                              trip.driverName?.[0] || 'D'
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-[#1A1A1A] m-0">{trip.driverName || 'Driver'}</p>
+                            <p className="text-[0.6rem] text-amber-600 font-semibold m-0 uppercase tracking-wider">Shared Trip</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-bold text-amber-700 font-mono m-0">{trip.pricePerSeat} PKR</p>
+                            <p className="text-[0.55rem] text-[#8B8B9E] m-0">per seat</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-[#8B8B9E] mb-2">
+                          <span className="flex items-center gap-1">
+                            <svg className="w-3 h-3 text-amber-500" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="17" r="2" /><circle cx="19" cy="17" r="2" /><path d="M5 17h14M5 12h14M5 7h14" /></svg>
+                            <AddressLabel address={trip.pickupAddress} lat={0} lng={0} />
+                          </span>
+                          <span>→</span>
+                          <span className="flex items-center gap-1 truncate">
+                            <svg className="w-3 h-3 text-[#1A1A1A] flex-shrink-0" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="17" r="2" /><circle cx="19" cy="17" r="2" /><path d="M5 17h14M5 12h14M5 7h14" /></svg>
+                            <AddressLabel address={trip.dropoffAddress} lat={0} lng={0} />
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 text-[0.55rem] font-bold">
+                              <span className="relative flex w-2 h-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                              </span>
+                              {trip.availableSeats} {trip.availableSeats === 1 ? 'seat' : 'seats'} left
+                            </span>
+                            <span className="text-[0.55rem] text-[#8B8B9E]">
+                              {new Date(trip.departureTime).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleRequestJoin(trip.tripId); }}
+                            className="bg-amber-500 text-white text-xs font-bold py-2 px-4 rounded-lg hover:bg-amber-600 transition cursor-pointer border-none"
+                          >
+                            Request to Join
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-2 mt-4">
                 <button className="bg-transparent border-2 border-border text-text-muted hover:border-pink hover:text-pink inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm rounded-sm px-5 py-2.5 cursor-pointer transition flex-1" onClick={() => { setStep('pickup'); setDropoff(null); }}>Back</button>
-                <button className="inline-flex btn-primary items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none flex-1" onClick={() => setStep('selfie')}>
+                <button className="inline-flex btn-primary items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none flex-1" onClick={() => setStep('selfie')}>
                   Next: Selfie
                 </button>
               </div>

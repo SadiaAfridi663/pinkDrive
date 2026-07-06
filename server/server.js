@@ -81,6 +81,15 @@ async function start() {
   const walletRoutes = require('./routes/wallet');
   app.use('/api/wallet', walletRoutes);
 
+  const sharedTripRoutes = require('./routes/sharedTrips');
+  app.use('/api/shared-trips', sharedTripRoutes);
+
+  const reviewRoutes = require('./routes/reviews');
+  app.use('/api/reviews', reviewRoutes);
+
+  const notificationRoutes = require('./routes/notifications');
+  app.use('/api/notifications', notificationRoutes);
+
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
   app.use(errorMiddleware);
 

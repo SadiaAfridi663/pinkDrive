@@ -2,6 +2,7 @@ import { useState, useContext, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
+import NotificationPanel from './NotificationPanel';
 
 const NAV_ITEMS = {
   passenger: [
@@ -13,6 +14,7 @@ const NAV_ITEMS = {
   driver: [
     { to: '/driver/dashboard', label: 'Dashboard', icon: 'dashboard' },
     { to: '/driver/rides', label: 'Rides', icon: 'car' },
+    { to: '/driver/create-trip', label: 'Share Trip', icon: 'carPlus' },
     { to: '/wallet', label: 'Wallet', icon: 'wallet' },
     { to: '/wallet/earnings', label: 'Earnings', icon: 'chart' },
     { to: '/wallet/withdraw', label: 'Withdraw', icon: 'walletArrow' },
@@ -67,10 +69,11 @@ const BADGE_MAP = {
 
 function DashboardLayout({ views, defaultTab, children, title, subtitle }) {
   const { user, logout } = useContext(AuthContext);
-  const { counts } = useNotifications();
+  const { counts, unreadCount } = useNotifications();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notificationOpen, setNotificationOpen] = useState(false);
   const isTabMode = !!views;
 
   const [activeTab, setActiveTab] = useState(defaultTab || (isTabMode ? Object.keys(views)[0] : null));
@@ -204,10 +207,18 @@ function DashboardLayout({ views, defaultTab, children, title, subtitle }) {
             </div>
 
             <div className="flex items-center gap-2">
-              <button className="relative w-9 h-9 flex items-center justify-center text-[#8B8B9E] hover:text-[#1A1A1A] hover:bg-[#FFF8FA] rounded-lg transition cursor-pointer border-none bg-transparent">
+              <button
+                onClick={() => setNotificationOpen(true)}
+                className="relative w-9 h-9 flex items-center justify-center text-[#8B8B9E] hover:text-[#1A1A1A] hover:bg-[#FFF8FA] rounded-lg transition cursor-pointer border-none bg-transparent"
+              >
                 <Icon name="bell" className="w-5 h-5" />
-                {Object.values(counts).some(c => c > 0) && (
+                {(unreadCount > 0 || Object.values(counts).some(c => c > 0)) && (
                   <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#E91E8C]" />
+                )}
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-4 px-1 text-[9px] font-bold leading-none text-white bg-[#E91E8C] rounded-full flex items-center justify-center">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
                 )}
               </button>
               <div className="w-8 h-8 rounded-full bg-[#FCE4EC] flex items-center justify-center text-xs font-bold text-[#E91E8C] lg:hidden">
@@ -221,6 +232,11 @@ function DashboardLayout({ views, defaultTab, children, title, subtitle }) {
           {isTabMode ? (ActiveComponent ? <ActiveComponent /> : null) : children}
         </main>
       </div>
+
+      <NotificationPanel
+        isOpen={notificationOpen}
+        onClose={() => setNotificationOpen(false)}
+      />
     </div>
   );
 }

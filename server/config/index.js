@@ -16,6 +16,10 @@ const connectDatabases = async () => {
   require('../models/Transaction');
   require('../models/WithdrawalRequest');
   require('../models/Bid');
+  require('../models/SharedTrip');
+  require('../models/TripRequest');
+  require('../models/Review');
+  require('../models/Notification');
   await connectSQL();
 };
 
