@@ -61,9 +61,11 @@ async function start() {
   });
 
   const authRoutes = require('./routes/auth');
+  const driverRoutes = require('./routes/drivers');
   const driverVerificationRoutes = require('./routes/driverVerification');
   const rideRoutes = require('./routes/rides');
   app.use('/api/auth', authRoutes);
+  app.use('/api/drivers', driverRoutes);
   app.use('/api/driver-verification', driverVerificationRoutes);
   app.use('/api/rides', rideRoutes);
 

@@ -48,6 +48,7 @@ export const driverAPI = {
     }),
   getStatus: () => api.get('/driver-verification/status'),
   removeDocument: (documentId) => api.delete(`/driver-verification/documents/${documentId}`),
+  getProfile: (id) => api.get(`/drivers/profile/${id}`),
 };
 
 export const adminAPI = {

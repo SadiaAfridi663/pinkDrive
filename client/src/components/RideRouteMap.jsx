@@ -45,6 +45,15 @@ const ORANGE_ICON = new L.Icon({
   shadowSize: [41, 41],
 });
 
+const PURPLE_ICON = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-violet.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
+});
+
 const CAR_ICON = L.divIcon({
   html: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1a1a2e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(-45deg)"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9L18 10l-2-4c-.3-.6-1-1-1.7-1H9.7c-.7 0-1.4.4-1.7 1L6 10l-2.5.1C2.7 10.3 2 11.1 2 12v3c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg>',
   className: '',
@@ -55,7 +64,7 @@ const CAR_ICON = L.divIcon({
 const ROUTE_COLOR = '#e9408b';
 const ROUTE_WEIGHT = 5;
 
-function RideRouteMap({ pickup, dropoff, driverLocation, passengerLocation, nearbyDrivers, height, className }) {
+function RideRouteMap({ pickup, dropoff, driverLocation, passengerLocation, nearbyDrivers, secondaryPickup, secondaryDropoff, secondaryColor, height, className }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const pickupMarkerRef = useRef(null);
@@ -64,6 +73,9 @@ function RideRouteMap({ pickup, dropoff, driverLocation, passengerLocation, near
   const passengerMarkerRef = useRef(null);
   const routeLayerRef = useRef(null);
   const nearbyMarkersRef = useRef([]);
+  const secondaryPickupMarkerRef = useRef(null);
+  const secondaryDropoffMarkerRef = useRef(null);
+  const secondaryRouteLayerRef = useRef(null);
 
   const fetchRoute = async (map, p1, p2) => {
     if (routeLayerRef.current) {
@@ -89,12 +101,39 @@ function RideRouteMap({ pickup, dropoff, driverLocation, passengerLocation, near
     }
   };
 
+  const fetchSecondaryRoute = async (map, p1, p2) => {
+    if (secondaryRouteLayerRef.current) {
+      map.removeLayer(secondaryRouteLayerRef.current);
+      secondaryRouteLayerRef.current = null;
+    }
+    try {
+      const url = `https://router.project-osrm.org/route/v1/driving/${p1.lng},${p1.lat};${p2.lng},${p2.lat}?geometries=geojson&overview=full`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.code !== 'Ok' || !data.routes?.[0]) return;
+      const coords = data.routes[0].geometry.coordinates.map((c) => [c[1], c[0]]);
+      secondaryRouteLayerRef.current = L.polyline(coords, {
+        color: secondaryColor || '#f59e0b',
+        weight: 4,
+        opacity: 0.7,
+        lineCap: 'round',
+        lineJoin: 'round',
+        dashArray: '10, 8',
+      }).addTo(map);
+      fitAll();
+    } catch (err) {
+      console.warn('[RideRouteMap] Secondary OSRM route failed:', err);
+    }
+  };
+
   const fitAll = () => {
     const map = mapRef.current;
     if (!map) return;
     const points = [];
     if (pickup) points.push([pickup.lat, pickup.lng]);
     if (dropoff) points.push([dropoff.lat, dropoff.lng]);
+    if (secondaryPickup) points.push([secondaryPickup.lat, secondaryPickup.lng]);
+    if (secondaryDropoff) points.push([secondaryDropoff.lat, secondaryDropoff.lng]);
     if (driverLocation) points.push([driverLocation.lat, driverLocation.lng]);
     if (passengerLocation) points.push([passengerLocation.lat, passengerLocation.lng]);
     if (points.length < 2) {
@@ -136,6 +175,9 @@ function RideRouteMap({ pickup, dropoff, driverLocation, passengerLocation, near
       passengerMarkerRef.current = null;
       routeLayerRef.current = null;
       nearbyMarkersRef.current = [];
+      secondaryPickupMarkerRef.current = null;
+      secondaryDropoffMarkerRef.current = null;
+      secondaryRouteLayerRef.current = null;
     };
   }, []);
 
@@ -171,6 +213,47 @@ function RideRouteMap({ pickup, dropoff, driverLocation, passengerLocation, near
       fetchRoute(map, pickup, dropoff);
     }
   }, [pickup, dropoff]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (secondaryPickup) {
+      if (secondaryPickupMarkerRef.current) {
+        secondaryPickupMarkerRef.current.setLatLng([secondaryPickup.lat, secondaryPickup.lng]);
+      } else {
+        secondaryPickupMarkerRef.current = L.marker([secondaryPickup.lat, secondaryPickup.lng], { icon: PURPLE_ICON })
+          .addTo(map).bindPopup('Your Pickup');
+      }
+    } else if (secondaryPickupMarkerRef.current) {
+      map.removeLayer(secondaryPickupMarkerRef.current);
+      secondaryPickupMarkerRef.current = null;
+    }
+
+    if (secondaryDropoff) {
+      if (secondaryDropoffMarkerRef.current) {
+        secondaryDropoffMarkerRef.current.setLatLng([secondaryDropoff.lat, secondaryDropoff.lng]);
+      } else {
+        const AMBER_ICON = new L.Icon({
+          iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-orange.png',
+          shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+          iconSize: [25, 41],
+          iconAnchor: [12, 41],
+          popupAnchor: [1, -34],
+          shadowSize: [41, 41],
+        });
+        secondaryDropoffMarkerRef.current = L.marker([secondaryDropoff.lat, secondaryDropoff.lng], { icon: AMBER_ICON })
+          .addTo(map).bindPopup('Your Drop-off');
+      }
+    } else if (secondaryDropoffMarkerRef.current) {
+      map.removeLayer(secondaryDropoffMarkerRef.current);
+      secondaryDropoffMarkerRef.current = null;
+    }
+
+    if (secondaryPickup && secondaryDropoff) {
+      fetchSecondaryRoute(map, secondaryPickup, secondaryDropoff);
+    }
+  }, [secondaryPickup, secondaryDropoff]);
 
   useEffect(() => {
     const map = mapRef.current;

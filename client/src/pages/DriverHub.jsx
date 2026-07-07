@@ -7,6 +7,7 @@ import DriverEarnings from './DriverEarnings';
 import DriverWithdraw from './DriverWithdraw';
 import DriverVerification from './DriverVerification';
 import DeclineReasonModal from '../components/DeclineReasonModal';
+import RideRouteMap from '../components/RideRouteMap';
 
 const StatusIcon = ({ name, className = 'w-7 h-7' }) => {
   const icons = {
@@ -346,6 +347,15 @@ function TripRequestsView() {
                             Profile
                           </button>
                         </div>
+                      </div>
+                      <div className="mt-4 h-32 rounded-xl overflow-hidden border border-[#F0E0E8]">
+                        <RideRouteMap
+                          pickup={{ lat: trip.pickupLat, lng: trip.pickupLng }}
+                          dropoff={{ lat: trip.dropoffLat, lng: trip.dropoffLng }}
+                          secondaryPickup={{ lat: req.pickupLat, lng: req.pickupLng }}
+                          secondaryDropoff={{ lat: req.dropoffLat, lng: req.dropoffLng }}
+                          height="128px"
+                        />
                       </div>
                     </div>
                   ))}

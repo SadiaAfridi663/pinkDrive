@@ -1,5 +1,6 @@
 const connectDB = require('./db');
 const { connectSQL } = require('./db.sql');
+const setupAssociations = require('../models/associations');
 
 const connectDatabases = async () => {
   await connectDB();
@@ -20,6 +21,9 @@ const connectDatabases = async () => {
   require('../models/TripRequest');
   require('../models/Review');
   require('../models/Notification');
+  
+  setupAssociations();
+  
   await connectSQL();
 };
 

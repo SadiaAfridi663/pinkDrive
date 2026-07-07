@@ -33,8 +33,41 @@ function RequestRideInner() {
   const [sharedTrips, setSharedTrips] = useState([]);
   const [loadingShared, setLoadingShared] = useState(false);
   const [selectedTrip, setSelectedTrip] = useState(null);
+  const [activeBlock, setActiveBlock] = useState(null);
+  const [activeRequestId, setActiveRequestId] = useState(null);
   const navigate = useNavigate();
   const { position } = useGeolocation();
+
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const [activeRes, reqsRes] = await Promise.allSettled([
+          rideAPI.getActiveRide(),
+          sharedTripAPI.getMyRequests(),
+        ]);
+        if (cancelled) return;
+        if (activeRes.status === 'fulfilled' && activeRes.value.data.data?.ride) {
+          setActiveBlock('private');
+          return;
+        }
+        if (reqsRes.status === 'fulfilled') {
+          const reqs = reqsRes.value.data.data?.requests || [];
+          const accepted = reqs.find(r => r.status === 'accepted');
+          if (accepted) {
+            setActiveBlock('shared');
+            setActiveRequestId(accepted.id);
+            return;
+          }
+        }
+        setActiveBlock(false);
+      } catch {
+        if (!cancelled) setActiveBlock(false);
+      }
+    };
+    check();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (!tripId) return;
@@ -197,6 +230,40 @@ function RequestRideInner() {
     if (name === 'selfie' && selfieDataUrl) return `${base} bg-[#e8f5e9] text-success`;
     return `${base} bg-[#f5f5f5] text-text-light`;
   };
+
+  if (activeBlock === 'private') {
+    return (
+      <div className="max-w-2xl w-full px-6 py-8 pb-16 text-center">
+        <div className="bg-white rounded-2xl border border-[#F0E0E8] p-10 shadow-sm">
+          <div className="mx-auto mb-5 w-20 h-20 bg-[#FCE4EC] rounded-full flex items-center justify-center">
+            <svg className="w-10 h-10 text-[#E91E8C]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M5 17h14M5 12h14M5 7h14" /></svg>
+          </div>
+          <h2 className="text-xl font-bold text-[#880E4F] m-0 mb-2">You Already Have an Active Ride</h2>
+          <p className="text-sm text-[#8B8B9E] m-0 mb-6 max-w-sm mx-auto">You cannot request a new ride while you already have one in progress. Please complete or cancel your current ride first.</p>
+          <button className="bg-[#E91E8C] text-white font-bold text-sm py-3 px-8 rounded-xl hover:bg-[#C2185B] transition cursor-pointer border-none" onClick={() => navigate('/ride/active')}>
+            View Active Ride
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (activeBlock === 'shared') {
+    return (
+      <div className="max-w-2xl w-full px-6 py-8 pb-16 text-center">
+        <div className="bg-white rounded-2xl border border-[#F0E0E8] p-10 shadow-sm">
+          <div className="mx-auto mb-5 w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center">
+            <svg className="w-10 h-10 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 14l2-5h14l2 5" /><path d="M5 14v3a1 1 0 001 1h2a1 1 0 001-1v-1" /><path d="M15 17a1 1 0 001 1h2a1 1 0 001-1v-1" /></svg>
+          </div>
+          <h2 className="text-xl font-bold text-[#880E4F] m-0 mb-2">You Have an Active Shared Trip</h2>
+          <p className="text-sm text-[#8B8B9E] m-0 mb-6 max-w-sm mx-auto">You already have an accepted shared trip. Please complete or cancel it before booking a new ride.</p>
+          <button className="bg-amber-500 text-white font-bold text-sm py-3 px-8 rounded-xl hover:bg-amber-600 transition cursor-pointer border-none" onClick={() => navigate(`/shared-trip/${activeRequestId}`)}>
+            View Shared Trip
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl w-full px-6 py-8 pb-16">

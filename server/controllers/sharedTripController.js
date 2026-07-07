@@ -92,7 +92,7 @@ exports.getAvailableTrips = catchAsync(async (req, res, next) => {
   const driverIds = [...new Set(trips.map((t) => t.driverId))];
   const drivers = driverIds.length > 0 ? await User.findAll({
     where: { id: driverIds },
-    attributes: ['id', 'name', 'profilePhoto'],
+    attributes: ['id', 'name', 'profilePhoto', 'phone'],
   }) : [];
   const driverMap = Object.fromEntries(drivers.map((d) => [d.id, d]));
 
@@ -118,6 +118,7 @@ exports.getAvailableTrips = catchAsync(async (req, res, next) => {
       ...t.toJSON(),
       driverName: driver?.name,
       driverPhoto: driver?.profilePhoto ? fileToUrl(driver.profilePhoto) : null,
+      driverPhone: driver?.phone,
     };
   });
 
@@ -136,11 +137,32 @@ exports.getMyTrips = catchAsync(async (req, res, next) => {
 exports.getMyRequests = catchAsync(async (req, res, next) => {
   const requests = await TripRequest.findAll({
     where: { passengerId: req.user.id },
-    include: [{ model: SharedTrip, as: 'trip', attributes: ['id', 'pickupAddress', 'dropoffAddress', 'departureTime', 'pricePerSeat'] }],
+    include: [{
+      model: SharedTrip, as: 'trip',
+      attributes: ['id', 'driverId', 'pickupLat', 'pickupLng', 'pickupAddress', 'dropoffLat', 'dropoffLng', 'dropoffAddress', 'departureTime', 'pricePerSeat', 'paymentMethod', 'availableSeats', 'status'],
+    }],
     order: [['createdAt', 'DESC']],
   });
 
-  res.status(200).json({ success: true, data: { requests } });
+  const driverIds = [...new Set(requests.map(r => r.trip?.driverId).filter(Boolean))];
+  const drivers = driverIds.length > 0 ? await User.findAll({
+    where: { id: driverIds },
+    attributes: ['id', 'name', 'profilePhoto', 'phone'],
+  }) : [];
+  const driverMap = Object.fromEntries(drivers.map(d => [d.id, d]));
+
+  const data = requests.map(r => {
+    const json = r.toJSON();
+    const driver = json.trip ? driverMap[json.trip.driverId] : null;
+    return {
+      ...json,
+      driverName: driver?.name,
+      driverPhoto: driver?.profilePhoto ? fileToUrl(driver.profilePhoto) : null,
+      driverPhone: driver?.phone,
+    };
+  });
+
+  res.status(200).json({ success: true, data: { requests: data } });
 });
 
 exports.requestJoin = catchAsync(async (req, res, next) => {
@@ -151,6 +173,18 @@ exports.requestJoin = catchAsync(async (req, res, next) => {
     return next(new AppError('Pickup and dropoff locations are required.', 400));
   }
 
+  const Ride = require('../models/Ride');
+  const activeRide = await Ride.findOne({
+    where: {
+      passengerId: req.user.id,
+      status: { [Op.ne]: 'completed' },
+      cancelledAt: null,
+    },
+  });
+  if (activeRide) {
+    return next(new AppError('You already have an active ride. Complete it first.', 400));
+  }
+
   const trip = await SharedTrip.findByPk(tripId);
   if (!trip) return next(new AppError('Trip not found.', 404));
   if (trip.status !== 'active') return next(new AppError('This trip is no longer accepting requests.', 400));
@@ -159,9 +193,9 @@ exports.requestJoin = catchAsync(async (req, res, next) => {
 
   try {
     const activeReq = await TripRequest.findOne({
-      where: { passengerId: req.user.id, tripId, status: 'pending' },
+      where: { passengerId: req.user.id, tripId, status: { [Op.in]: ['pending', 'accepted'] } },
     });
-    if (activeReq) return next(new AppError('You already have a pending request for this trip.', 400));
+    if (activeReq) return next(new AppError('You already have a request for this trip.', 400));
   } catch { /* best-effort */ }
 
   const distToRoute = distanceToLineSegment(pickupLat, pickupLng, trip.pickupLat, trip.pickupLng, trip.dropoffLat, trip.dropoffLng);

@@ -59,6 +59,14 @@ exports.createRide = catchAsync(async (req, res, next) => {
     return next(new AppError('You already have an active ride.', 400));
   }
 
+  const TripRequest = require('../models/TripRequest');
+  const activeShared = await TripRequest.findOne({
+    where: { passengerId: req.user.id, status: 'accepted' },
+  });
+  if (activeShared) {
+    return next(new AppError('You already have an accepted shared trip. Complete or cancel it first.', 400));
+  }
+
   const activeAreas = await ServiceArea.findAll({ where: { isActive: true } });
   if (activeAreas.length > 0) {
     const inServiceArea = activeAreas.some((a) =>

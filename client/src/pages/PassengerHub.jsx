@@ -1,6 +1,7 @@
 import { useState, useEffect, useContext, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import AddressLabel from '../components/AddressLabel';
+import RideRouteMap from '../components/RideRouteMap';
 import { rideAPI, walletAPI, sosAPI, sharedTripAPI } from '../services/api';
 import { AuthContext } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -14,6 +15,7 @@ const API_URL = import.meta.env.VITE_API_URL
 function DashboardView() {
   const [activeRide, setActiveRide] = useState(null);
   const [activeDriver, setActiveDriver] = useState(null);
+  const [activeSharedRequest, setActiveSharedRequest] = useState(null);
   const [history, setHistory] = useState([]);
   const [walletBalance, setWalletBalance] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -23,10 +25,11 @@ function DashboardView() {
 
   const fetch = useCallback(async (mounted = true) => {
     try {
-      const [activeRes, historyRes, walletRes] = await Promise.all([
+      const [activeRes, historyRes, walletRes, sharedRes] = await Promise.all([
         rideAPI.getActiveRide(),
         rideAPI.getHistory().catch(() => ({ data: { data: { rides: [] } } })),
         walletAPI.getWallet().catch(() => ({ data: { data: { wallet: { balance: 0 } } } })),
+        sharedTripAPI.getMyRequests().catch(() => ({ data: { data: { requests: [] } } })),
       ]);
       if (mounted) {
         const active = activeRes.data.data;
@@ -34,6 +37,9 @@ function DashboardView() {
         setActiveDriver(active.driver);
         setHistory(historyRes.data.data.rides.slice(0, 5));
         setWalletBalance(walletRes.data.data.wallet.balance);
+        const reqs = sharedRes.data.data.requests || [];
+        const accepted = reqs.find(r => r.status === 'accepted');
+        setActiveSharedRequest(accepted || null);
       }
     } catch {
       // no active ride
@@ -56,6 +62,19 @@ function DashboardView() {
     socket.on('ride:status', handler);
     return () => { socket.emit('leave:ride', activeRide.id); socket.off('ride:status', handler); };
   }, [socket, activeRide?.id]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const sharedHandler = () => fetch(true);
+    socket.on('trip:request:accepted', sharedHandler);
+    socket.on('trip:request:declined', sharedHandler);
+    socket.on('trip:cancelled', sharedHandler);
+    return () => {
+      socket.off('trip:request:accepted', sharedHandler);
+      socket.off('trip:request:declined', sharedHandler);
+      socket.off('trip:cancelled', sharedHandler);
+    };
+  }, [socket]);
 
   const hours = new Date().getHours();
   const greeting = hours < 12 ? 'Good morning' : hours < 18 ? 'Good afternoon' : 'Good evening';
@@ -149,6 +168,75 @@ function DashboardView() {
               onClick={() => navigate(activeRide.status === 'pending' ? `/ride/bidding/${activeRide.id}` : '/ride/active')}
             >
               View Ride Details
+            </button>
+          </div>
+        </div>
+      ) : activeSharedRequest ? (
+        <div className="bg-white rounded-2xl border border-[#F0E0E8] overflow-hidden shadow-sm mb-7">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full border uppercase tracking-wider bg-emerald-50 text-emerald-700 border-emerald-200">
+                Accepted
+              </span>
+              {activeSharedRequest.trip?.pricePerSeat && (
+                <span className="text-xl font-bold text-amber-700 font-mono">{activeSharedRequest.trip.pricePerSeat} PKR</span>
+              )}
+            </div>
+            <p className="text-lg font-bold text-[#1A1A1A] m-0 mb-5">Shared trip accepted! Driver is preparing.</p>
+
+            <div className="flex items-center gap-3 mb-5 bg-amber-50 rounded-xl p-3.5">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-100 to-amber-200 flex items-center justify-center text-lg font-bold text-amber-600 flex-shrink-0 border-2 border-amber-200 overflow-hidden">
+                {activeSharedRequest.driverPhoto ? (
+                  <img src={`${API_URL}/${activeSharedRequest.driverPhoto.replace(/\\/g, '/')}`} alt="" className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.textContent = activeSharedRequest.driverName?.[0] || 'D'; }} />
+                ) : (
+                  activeSharedRequest.driverName?.[0] || 'D'
+                )}
+              </div>
+              <div>
+                <p className="m-0 font-bold text-[#1A1A1A]">{activeSharedRequest.driverName || 'Driver'}</p>
+                <p className="m-0 text-xs text-[#8B8B9E]">Your driver</p>
+              </div>
+            </div>
+
+            <div className="space-y-3 mb-5 pb-5 border-b border-[#F0E0E8]">
+              <div className="flex items-start gap-3">
+                <span className="w-2.5 h-2.5 mt-1.5 rounded-full bg-violet-500 flex-shrink-0" />
+                <div className="text-sm"><span className="text-[#8B8B9E]">Your Pickup </span><span className="font-medium text-[#1A1A1A]"><AddressLabel address={activeSharedRequest.pickupAddress} lat={activeSharedRequest.pickupLat} lng={activeSharedRequest.pickupLng} /></span></div>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="w-2.5 h-2.5 mt-1.5 rounded-full bg-amber-500 flex-shrink-0" />
+                <div className="text-sm"><span className="text-[#8B8B9E]">Your Drop-off </span><span className="font-medium text-[#1A1A1A]"><AddressLabel address={activeSharedRequest.dropoffAddress} lat={activeSharedRequest.dropoffLat} lng={activeSharedRequest.dropoffLng} /></span></div>
+              </div>
+              {activeSharedRequest.trip?.departureTime && (
+                <p className="text-xs text-[#8B8B9E] m-0 ml-5">Departure: {new Date(activeSharedRequest.trip.departureTime).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+              )}
+            </div>
+
+            <div className="mb-5 flex items-center justify-between">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold">
+                <span className="relative flex w-2 h-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                </span>
+                {activeSharedRequest.trip?.availableSeats} {activeSharedRequest.trip?.availableSeats === 1 ? 'seat' : 'seats'} left
+              </span>
+            </div>
+
+            <div className="mb-5 rounded-xl overflow-hidden border border-[#F0E0E8]">
+              <RideRouteMap
+                pickup={{ lat: activeSharedRequest.trip?.pickupLat, lng: activeSharedRequest.trip?.pickupLng }}
+                dropoff={{ lat: activeSharedRequest.trip?.dropoffLat, lng: activeSharedRequest.trip?.dropoffLng }}
+                secondaryPickup={{ lat: activeSharedRequest.pickupLat, lng: activeSharedRequest.pickupLng }}
+                secondaryDropoff={{ lat: activeSharedRequest.dropoffLat, lng: activeSharedRequest.dropoffLng }}
+                height="180px"
+              />
+            </div>
+
+            <button
+              className="w-full bg-amber-500 text-white font-bold text-sm py-3.5 rounded-xl hover:bg-amber-600 transition cursor-pointer border-none shadow-sm"
+              onClick={() => navigate(`/shared-trip/${activeSharedRequest.id}`)}
+            >
+              View Shared Trip
             </button>
           </div>
         </div>
@@ -291,6 +379,8 @@ function PassengerHub() {
         const [trips, setTrips] = useState([]);
         const [loading, setLoading] = useState(true);
         const [joining, setJoining] = useState(null);
+        const [requestedTripIds, setRequestedTripIds] = useState(new Set());
+        const [profileModal, setProfileModal] = useState(null);
         const navigateHub = useNavigate();
         const { position } = useGeolocation();
         const { socket } = useSocket();
@@ -301,13 +391,23 @@ function PassengerHub() {
             try {
               const lat = position?.lat;
               const lng = position?.lng;
-              const res = await sharedTripAPI.getAvailable(lat, lng);
+              const [availRes, myReqsRes] = await Promise.all([
+                sharedTripAPI.getAvailable(lat, lng),
+                sharedTripAPI.getMyRequests().catch(() => ({ data: { data: { requests: [] } } })),
+              ]);
               if (!cancelled) {
-                const trips = (res.data.data.trips || []).map(t => ({
+                const trips = (availRes.data.data.trips || []).map(t => ({
                   ...t,
                   tripId: t.tripId || t.id
                 }));
                 setTrips(trips);
+                const myReqs = myReqsRes.data.data.requests || [];
+                const ids = new Set(
+                  myReqs
+                    .filter(r => r.status === 'pending' || r.status === 'accepted')
+                    .map(r => r.tripId)
+                );
+                setRequestedTripIds(ids);
               }
             } catch {
               if (!cancelled) setTrips([]);
@@ -334,12 +434,17 @@ function PassengerHub() {
                 : t
             ));
           };
+          const handleRequestAccepted = (data) => {
+            navigateHub(`/shared-trip/${data.requestId}`);
+          };
           socket.on('trip:created', handleTripCreated);
           socket.on('trip:seats:update', handleSeatsUpdate);
+          socket.on('trip:request:accepted', handleRequestAccepted);
           socket.emit('trip:passenger:listen');
           return () => {
             socket.off('trip:created', handleTripCreated);
             socket.off('trip:seats:update', handleSeatsUpdate);
+            socket.off('trip:request:accepted', handleRequestAccepted);
           };
         }, [socket]);
 
@@ -353,10 +458,38 @@ function PassengerHub() {
           }
         };
 
+        const filteredTrips = trips.filter(t => !requestedTripIds.has(t.tripId));
+
         if (loading) return <div className="p-5 lg:p-8 animate-pulse"><div className="h-8 bg-gray-200 rounded-lg w-1/3" /></div>;
 
         return (
           <div className="p-5 lg:p-8 max-w-4xl w-full">
+            {profileModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setProfileModal(null)}>
+                <div className="bg-white rounded-2xl p-8 max-w-sm w-full mx-4 shadow-xl border border-[#F0E0E8]" onClick={e => e.stopPropagation()}>
+                  <div className="text-center">
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-amber-100 to-amber-200 flex items-center justify-center text-3xl font-bold text-amber-600 mx-auto mb-4 border-2 border-amber-200 overflow-hidden">
+                      {profileModal.driverPhoto ? (
+                        <img src={`${API_URL}/${profileModal.driverPhoto.replace(/\\/g, '/')}`} alt="" className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.textContent = profileModal.driverName?.[0] || 'D'; }} />
+                      ) : (
+                        profileModal.driverName?.[0] || 'D'
+                      )}
+                    </div>
+                    <h3 className="text-xl font-bold text-[#1A1A1A] m-0 mb-1">{profileModal.driverName || 'Driver'}</h3>
+                    {profileModal.driverPhone && (
+                      <p className="text-sm text-[#8B8B9E] m-0 mb-4">{profileModal.driverPhone}</p>
+                    )}
+                    <button
+                      onClick={() => setProfileModal(null)}
+                      className="mt-2 bg-white border border-[#F0E0E8] text-[#880E4F] font-semibold text-sm py-2.5 px-8 rounded-xl hover:border-[#E91E8C] hover:bg-[#FFF8FA] transition cursor-pointer w-full"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="text-xs font-bold text-[#8B8B9E] uppercase tracking-wider m-0">Available Shared Trips</p>
@@ -370,7 +503,7 @@ function PassengerHub() {
               </button>
             </div>
 
-            {trips.length === 0 ? (
+            {filteredTrips.length === 0 ? (
               <div className="bg-white rounded-2xl border border-[#F0E0E8] p-10 text-center shadow-sm">
                 <div className="mx-auto mb-4 w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center">
                   <svg className="w-8 h-8 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 14l2-5h14l2 5" /><path d="M5 14v3a1 1 0 001 1h2a1 1 0 001-1v-1" /><path d="M15 17a1 1 0 001 1h2a1 1 0 001-1v-1" /></svg>
@@ -380,7 +513,7 @@ function PassengerHub() {
               </div>
             ) : (
               <div className="space-y-3">
-                {trips.map((trip) => (
+                {filteredTrips.map((trip) => (
                   <div
                     key={trip.tripId}
                     className="bg-white rounded-2xl border border-[#F0E0E8] overflow-hidden shadow-sm hover:border-amber-300 hover:shadow-md transition-all"
@@ -406,6 +539,15 @@ function PassengerHub() {
                           <p className="text-2xl font-bold text-amber-700 font-mono m-0">{trip.pricePerSeat} PKR</p>
                           <p className="text-[0.55rem] text-[#8B8B9E] m-0">per seat</p>
                         </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 mb-4">
+                        <button
+                          onClick={() => setProfileModal({ driverName: trip.driverName, driverPhoto: trip.driverPhoto, driverPhone: trip.driverPhone })}
+                          className="text-xs font-semibold text-[#880E4F] bg-white border border-[#F0E0E8] rounded-lg px-3 py-1.5 hover:border-[#E91E8C] hover:bg-[#FFF8FA] transition cursor-pointer"
+                        >
+                          View Profile
+                        </button>
                       </div>
 
                       <div className="bg-[#FFF8FA] rounded-xl px-4 py-3 mb-4 space-y-2">
@@ -436,6 +578,117 @@ function PassengerHub() {
                         >
                           {joining === trip.tripId ? 'Opening...' : 'Book a Seat'}
                         </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      },
+    },
+    'my-shared-trips': {
+      label: 'My Shared Trips',
+      subtitle: 'Your shared trip requests',
+      icon: 'carPlus',
+      component: () => {
+        const [requests, setRequests] = useState([]);
+        const [loading, setLoading] = useState(true);
+        const navigateHub = useNavigate();
+
+        useEffect(() => {
+          let cancelled = false;
+          sharedTripAPI.getMyRequests()
+            .then(res => { if (!cancelled) setRequests(res.data.data.requests || []); })
+            .catch(() => { if (!cancelled) setRequests([]); })
+            .finally(() => { if (!cancelled) setLoading(false); });
+          return () => { cancelled = true; };
+        }, []);
+
+        useEffect(() => {
+          if (!socket) return;
+          const refresh = () => {
+            sharedTripAPI.getMyRequests()
+              .then(res => setRequests(res.data.data.requests || []))
+              .catch(() => {});
+          };
+          socket.on('trip:request:accepted', refresh);
+          socket.on('trip:request:declined', refresh);
+          socket.on('trip:cancelled', refresh);
+          return () => {
+            socket.off('trip:request:accepted', refresh);
+            socket.off('trip:request:declined', refresh);
+            socket.off('trip:cancelled', refresh);
+          };
+        }, [socket]);
+
+        if (loading) return <div className="p-5 lg:p-8 animate-pulse"><div className="h-8 bg-gray-200 rounded-lg w-1/3" /></div>;
+
+        const statusBadge = (status) => {
+          const map = {
+            pending: 'bg-amber-50 text-amber-700',
+            accepted: 'bg-emerald-50 text-emerald-700',
+            declined: 'bg-red-50 text-red-600',
+            cancelled: 'bg-gray-100 text-gray-400',
+          };
+          return map[status] || 'bg-gray-50 text-gray-600';
+        };
+
+        return (
+          <div className="p-5 lg:p-8 max-w-4xl w-full">
+            <h3 className="text-xs font-bold text-[#8B8B9E] uppercase tracking-wider m-0 mb-4">My Shared Trip Requests</h3>
+            {requests.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-[#F0E0E8] p-10 text-center shadow-sm">
+                <div className="mx-auto mb-4 w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center">
+                  <svg className="w-8 h-8 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 14l2-5h14l2 5" /><path d="M5 14v3a1 1 0 001 1h2a1 1 0 001-1v-1" /><path d="M15 17a1 1 0 001 1h2a1 1 0 001-1v-1" /></svg>
+                </div>
+                <h3 className="text-lg font-bold text-[#880E4F] m-0 mb-2">No Shared Trip Requests</h3>
+                <p className="text-sm text-[#8B8B9E] m-0 max-w-sm mx-auto">You haven't requested to join any shared trips yet. Browse available shared trips to get started.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {requests.map((r) => (
+                  <div
+                    key={r.id}
+                    className="bg-white rounded-2xl border border-[#F0E0E8] overflow-hidden shadow-sm hover:border-[#E91E8C] hover:shadow-md transition-all cursor-pointer"
+                    onClick={() => navigateHub(`/shared-trip/${r.id}`)}
+                  >
+                    <div className="p-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-100 to-amber-200 flex items-center justify-center text-lg font-bold text-amber-600 flex-shrink-0 border-2 border-amber-200 overflow-hidden">
+                            {r.driverPhoto ? (
+                              <img src={`${API_URL}/${r.driverPhoto.replace(/\\/g, '/')}`} alt="" className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.textContent = r.driverName?.[0] || 'D'; }} />
+                            ) : (
+                              r.driverName?.[0] || 'D'
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-[#1A1A1A] m-0">{r.driverName || 'Driver'}</p>
+                            <p className="text-xs text-[#8B8B9E] m-0">{r.trip?.pickupAddress ? 'Shared trip' : ''}</p>
+                          </div>
+                        </div>
+                        <span className={`text-[0.55rem] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${statusBadge(r.status)}`}>
+                          {r.status}
+                        </span>
+                      </div>
+                      <div className="bg-[#FFF8FA] rounded-xl px-4 py-3 space-y-2 mb-2">
+                        <div className="flex items-center gap-3 text-sm">
+                          <span className="w-2 h-2 rounded-full bg-violet-500 flex-shrink-0" />
+                          <span className="truncate text-[#1A1A1A]"><AddressLabel address={r.pickupAddress} lat={r.pickupLat} lng={r.pickupLng} /></span>
+                        </div>
+                        <div className="flex items-center gap-3 text-sm">
+                          <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
+                          <span className="truncate text-[#1A1A1A]"><AddressLabel address={r.dropoffAddress} lat={r.dropoffLat} lng={r.dropoffLng} /></span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3 text-xs text-[#8B8B9E]">
+                          {r.trip?.pricePerSeat && <span className="font-semibold text-amber-700">{r.trip.pricePerSeat} PKR/seat</span>}
+                          {r.trip?.departureTime && <span>{new Date(r.trip.departureTime).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>}
+                        </div>
+                        <svg className="w-4 h-4 text-[#B0B0C0]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6" /></svg>
                       </div>
                     </div>
                   </div>
