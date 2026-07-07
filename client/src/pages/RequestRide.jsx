@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { rideAPI, serviceAreaAPI, paymentsAPI, walletAPI, sharedTripAPI } from '../services/api';
 import MapLocationPicker from '../components/MapLocationPicker';
 import RideRouteMap from '../components/RideRouteMap';
@@ -12,6 +12,10 @@ import { reverseGeocode } from '../utils/geocode';
 const FARE_PER_KM = 50;
 
 function RequestRideInner() {
+  const [searchParams] = useSearchParams();
+  const tripId = searchParams.get('tripId');
+  const isShared = !!tripId;
+
   const [pickup, setPickup] = useState(null);
   const [pickupAddress, setPickupAddress] = useState('');
   const [dropoff, setDropoff] = useState(null);
@@ -28,8 +32,21 @@ function RequestRideInner() {
   const [loading, setLoading] = useState(false);
   const [sharedTrips, setSharedTrips] = useState([]);
   const [loadingShared, setLoadingShared] = useState(false);
+  const [selectedTrip, setSelectedTrip] = useState(null);
   const navigate = useNavigate();
   const { position } = useGeolocation();
+
+  useEffect(() => {
+    if (!tripId) return;
+    const fetchTrip = async () => {
+      try {
+        const res = await sharedTripAPI.getMyTrips();
+        const trip = res.data.data.trips.find(t => t.id === tripId);
+        if (trip) setSelectedTrip(trip);
+      } catch { /* ignore */ }
+    };
+    fetchTrip();
+  }, [tripId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,7 +110,13 @@ function RequestRideInner() {
     const fetch = async () => {
       try {
         const res = await sharedTripAPI.getAvailable(pickup.lat, pickup.lng);
-        if (!cancelled) setSharedTrips(res.data.data.trips || []);
+        if (!cancelled) {
+          const trips = (res.data.data.trips || []).map(t => ({
+            ...t,
+            tripId: t.tripId || t.id
+          }));
+          setSharedTrips(trips);
+        }
       } catch {
         if (!cancelled) setSharedTrips([]);
       }
@@ -178,8 +201,12 @@ function RequestRideInner() {
   return (
     <div className="max-w-2xl w-full px-6 py-8 pb-16">
       <div className="mb-8">
-        <h1 className="font-display text-[2.2rem] font-bold text-plum tracking-[-0.02em] leading-[1.15] m-0">Request a Ride</h1>
-        <p className="text-[0.95rem] text-text-muted mt-1 m-0">Set your pickup, drop-off, and verify with selfie</p>
+        <h1 className="font-display text-[2.2rem] font-bold text-plum tracking-[-0.02em] leading-[1.15] m-0">
+          {isShared ? 'Join Shared Trip' : 'Request a Ride'}
+        </h1>
+        <p className="text-[0.95rem] text-text-muted mt-1 m-0">
+          {isShared ? 'Set your pickup and drop-off to join the trip' : 'Set your pickup, drop-off, and verify with selfie'}
+        </p>
       </div>
 
       {error && <p className="bg-[#fff5f5] text-error border border-[#ffcdd2] px-3.5 py-2.5 rounded-sm text-sm mb-2">{error}</p>}
@@ -321,8 +348,8 @@ function RequestRideInner() {
 
               <div className="flex gap-2 mt-4">
                 <button className="bg-transparent border-2 border-border text-text-muted hover:border-pink hover:text-pink inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm rounded-sm px-5 py-2.5 cursor-pointer transition flex-1" onClick={() => { setStep('pickup'); setDropoff(null); }}>Back</button>
-                <button className="inline-flex btn-primary items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none flex-1" onClick={() => setStep('selfie')}>
-                  Next: Selfie
+                <button className="inline-flex btn-primary items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none flex-1" onClick={() => isShared ? setStep('payment') : setStep('selfie')}>
+                  {isShared ? 'Next: Confirm' : 'Next: Selfie'}
                 </button>
               </div>
             </div>
@@ -330,7 +357,7 @@ function RequestRideInner() {
         </div>
       )}
 
-      {step === 'selfie' && (
+      {step === 'selfie' && !isShared && (
         <div>
           <p className="text-sm text-text-muted mb-4">Capture a selfie to verify your identity. This is required before requesting a ride.</p>
           <SelfieCapture onCapture={handleSelfieCapture} />
@@ -339,6 +366,17 @@ function RequestRideInner() {
             <button className="bg-transparent border-2 border-border text-text-muted hover:border-pink hover:text-pink inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm rounded-sm px-5 py-2.5 cursor-pointer transition flex-1" onClick={() => setStep('dropoff')}>Back</button>
             <button className="inline-flex btn-primary items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none flex-1" onClick={() => setStep('payment')} disabled={!selfieDataUrl}>
               Next: Payment
+            </button>
+          </div>
+        </div>
+      )}
+      {step === 'selfie' && isShared && (
+        <div>
+          <p className="text-sm text-text-muted mb-4">Selfie verification is not needed for shared trips. Proceed to confirm your request.</p>
+          <div className="flex gap-2 mt-4">
+            <button className="bg-transparent border-2 border-border text-text-muted hover:border-pink hover:text-pink inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm rounded-sm px-5 py-2.5 cursor-pointer transition flex-1" onClick={() => setStep('dropoff')}>Back</button>
+            <button className="inline-flex btn-primary items-center justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none flex-1" onClick={() => setStep('payment')}>
+              Next: Review & Confirm
             </button>
           </div>
         </div>
@@ -357,87 +395,99 @@ function RequestRideInner() {
                 <span className="font-medium text-plum font-mono">{distance ? `${distance} km` : 'N/A'}</span>
               </div>
             </div>
-            <div className="mb-4">
-              <label className="label text-sm font-semibold">Your Offer (PKR)</label>
-              <p className="text-xs text-text-muted mb-2">Set the amount you're willing to pay. Nearby drivers will bid on your ride.</p>
-              <input className="input text-lg font-mono font-bold text-center" type="number" min="50" step="10" placeholder="e.g. 500" value={passengerOffer} onChange={(e) => setPassengerOffer(e.target.value)} />
-              {paymentMethod === 'wallet' && walletBalance !== null && passengerOffer && parseFloat(passengerOffer) > walletBalance && (
-                <p className="text-xs text-error mt-1">Exceeds wallet balance ({walletBalance.toFixed(0)} PKR). Top up or choose cash.</p>
-              )}
-            </div>
-          </div>
-
-          <h3 className="font-display text-base font-semibold m-0 mb-3">Payment Method</h3>
-
-          <div
-            className={`flex-1 flex flex-col items-center gap-1 p-3 border-2 rounded-sm cursor-pointer transition text-sm mb-2 ${paymentMethod === 'cash'
-              ? 'border-pink bg-pink-subtle text-pink font-semibold'
-              : 'border-border text-text bg-off-white hover:border-pink'
-              }`}
-            onClick={() => setPaymentMethod('cash')}
-          >
-            <div className="flex items-center gap-3 w-full">
-              <span className="text-[1.3rem]">&#x1F4B5;</span>
-              <div className="text-left flex-1">
-                <div className="font-semibold">Cash</div>
-                <div className="text-xs text-text-muted">Pay the driver in cash after the ride</div>
+            {!isShared && (
+              <div className="mb-4">
+                <label className="label text-sm font-semibold">Your Offer (PKR)</label>
+                <p className="text-xs text-text-muted mb-2">Set the amount you're willing to pay. Nearby drivers will bid on your ride.</p>
+                <input className="input text-lg font-mono font-bold text-center" type="number" min="50" step="10" placeholder="e.g. 500" value={passengerOffer} onChange={(e) => setPassengerOffer(e.target.value)} />
+                {paymentMethod === 'wallet' && walletBalance !== null && passengerOffer && parseFloat(passengerOffer) > walletBalance && (
+                  <p className="text-xs text-error mt-1">Exceeds wallet balance ({walletBalance.toFixed(0)} PKR). Top up or choose cash.</p>
+                )}
               </div>
-              {paymentMethod === 'cash' && <span className="text-pink font-bold text-sm">Selected</span>}
-            </div>
-          </div>
-
-          <div
-            className={`flex-1 flex flex-col items-center gap-1 p-3 border-2 rounded-sm transition text-sm mb-2 ${!stripeConfigured ? 'border-border bg-[#f9f9f9] text-text-light opacity-60 cursor-not-allowed' : paymentMethod === 'stripe'
-              ? 'border-pink bg-pink-subtle text-pink font-semibold cursor-pointer'
-              : 'border-border text-text bg-off-white hover:border-pink cursor-pointer'
-              }`}
-            onClick={() => stripeConfigured && setPaymentMethod('stripe')}
-          >
-            <div className="flex items-center gap-3 w-full">
-              <span className="text-[1.3rem]">&#x1F4B3;</span>
-              <div className="text-left flex-1">
-                <div className="font-semibold">{!stripeConfigured ? 'Stripe / Card' : 'Stripe / Card'}</div>
-                <div className="text-xs text-text-muted">{!stripeConfigured ? 'Not configured — pay with cash instead' : 'Pay online with credit/debit card'}</div>
+            )}
+            {isShared && selectedTrip && (
+              <div className="mb-4 bg-amber-50 p-4 rounded-xl border border-amber-200">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-amber-800">Shared Trip Price</span>
+                  <span className="text-lg font-bold text-amber-700 font-mono">{selectedTrip.pricePerSeat} PKR</span>
+                </div>
+                <p className="text-[0.6rem] text-amber-600 mt-1">Fixed price per seat for this shared trip</p>
               </div>
-              {paymentMethod === 'stripe' && <span className="text-pink font-bold text-sm">Selected</span>}
-              {!stripeConfigured && <span className="text-text-light font-bold text-[0.65rem] uppercase tracking-wider">Unavailable</span>}
-            </div>
+            )}
           </div>
 
-          <div
-            className={`flex-1 flex flex-col items-center gap-1 p-3 border-2 rounded-sm text-sm mb-2 ${fare && walletBalance !== null && walletBalance < fare
-              ? 'border-border bg-[#f9f9f9] text-text-light opacity-60 cursor-not-allowed'
-              : paymentMethod === 'wallet'
-                ? 'border-pink bg-pink-subtle text-pink font-semibold cursor-pointer'
-                : 'border-border text-text bg-off-white hover:border-pink cursor-pointer'
-              }`}
-            onClick={() => {
-              if (!(fare && walletBalance !== null && walletBalance < fare)) {
-                setPaymentMethod('wallet');
-              }
-            }}
-          >
-            <div className="flex items-center gap-3 w-full">
-              <span className="text-[1.3rem]">&#x1F4B0;</span>
-              <div className="text-left flex-1">
-                <div className="font-semibold">Wallet</div>
-                <div className="text-xs text-text-muted">
-                  {walletBalance !== null
-                    ? `Balance: ${walletBalance.toLocaleString()} PKR${fare && walletBalance < fare ? ' — insufficient, top up in Wallet' : ''}`
-                    : 'Pay from your PinkDrive wallet'}
+          {!isShared && (
+            <>
+              <h3 className="font-display text-base font-semibold m-0 mb-3">Payment Method</h3>
+              <div
+                className={`flex-1 flex flex-col items-center gap-1 p-3 border-2 rounded-sm cursor-pointer transition text-sm mb-2 ${paymentMethod === 'cash'
+                  ? 'border-pink bg-pink-subtle text-pink font-semibold'
+                  : 'border-border text-text bg-off-white hover:border-pink'
+                  }`}
+                onClick={() => setPaymentMethod('cash')}
+              >
+                <div className="flex items-center gap-3 w-full">
+                  <span className="text-[1.3rem]">&#x1F4B5;</span>
+                  <div className="text-left flex-1">
+                    <div className="font-semibold">Cash</div>
+                    <div className="text-xs text-text-muted">Pay the driver in cash after the ride</div>
+                  </div>
+                  {paymentMethod === 'cash' && <span className="text-pink font-bold text-sm">Selected</span>}
                 </div>
               </div>
-              {paymentMethod === 'wallet' && !(fare && walletBalance !== null && walletBalance < fare) && <span className="text-pink font-bold text-sm">Selected</span>}
-              {fare && walletBalance !== null && walletBalance < fare && <span className="text-text-light font-bold text-[0.65rem] uppercase tracking-wider">Insufficient</span>}
-            </div>
-          </div>
+              <div
+                className={`flex-1 flex flex-col items-center gap-1 p-3 border-2 rounded-sm transition text-sm mb-2 ${!stripeConfigured ? 'border-border bg-[#f9f9f9] text-text-light opacity-60 cursor-not-allowed' : paymentMethod === 'stripe'
+                  ? 'border-pink bg-pink-subtle text-pink font-semibold cursor-pointer'
+                  : 'border-border text-text bg-off-white hover:border-pink cursor-pointer'
+                  }`}
+                onClick={() => stripeConfigured && setPaymentMethod('stripe')}
+              >
+                <div className="flex items-center gap-3 w-full">
+                  <span className="text-[1.3rem]">&#x1F4B3;</span>
+                  <div className="text-left flex-1">
+                    <div className="font-semibold">{!stripeConfigured ? 'Stripe / Card' : 'Stripe / Card'}</div>
+                    <div className="text-xs text-text-muted">{!stripeConfigured ? 'Not configured — pay with cash instead' : 'Pay online with credit/debit card'}</div>
+                  </div>
+                  {paymentMethod === 'stripe' && <span className="text-pink font-bold text-sm">Selected</span>}
+                  {!stripeConfigured && <span className="text-text-light font-bold text-[0.65rem] uppercase tracking-wider">Unavailable</span>}
+                </div>
+              </div>
+              <div
+                className={`flex-1 flex flex-col items-center gap-1 p-3 border-2 rounded-sm text-sm mb-2 ${fare && walletBalance !== null && walletBalance < fare
+                  ? 'border-border bg-[#f9f9f9] text-text-light opacity-60 cursor-not-allowed'
+                  : paymentMethod === 'wallet'
+                    ? 'border-pink bg-pink-subtle text-pink font-semibold cursor-pointer'
+                    : 'border-border text-text bg-off-white hover:border-pink cursor-pointer'
+                  }`}
+                onClick={() => {
+                  if (!(fare && walletBalance !== null && walletBalance < fare)) {
+                    setPaymentMethod('wallet');
+                  }
+                }}
+              >
+                <div className="flex items-center gap-3 w-full">
+                  <span className="text-[1.3rem]">&#x1F4B0;</span>
+                  <div className="text-left flex-1">
+                    <div className="font-semibold">Wallet</div>
+                    <div className="text-xs text-text-muted">
+                      {walletBalance !== null
+                        ? `Balance: ${walletBalance.toLocaleString()} PKR${fare && walletBalance < fare ? ' — insufficient, top up in Wallet' : ''}`
+                        : 'Pay from your PinkDrive wallet'}
+                    </div>
+                  </div>
+                  {paymentMethod === 'wallet' && !(fare && walletBalance !== null && walletBalance < fare) && <span className="text-pink font-bold text-sm">Selected</span>}
+                  {fare && walletBalance !== null && walletBalance < fare && <span className="text-text-light font-bold text-[0.65rem] uppercase tracking-wider">Insufficient</span>}
+                </div>
+              </div>
+            </>
+          )}
 
-          <div className="flex gap-2 mt-6">
-            <button className="bg-transparent border-2 border-border text-text-muted hover:border-pink hover:text-pink inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm rounded-sm px-5 py-2.5 cursor-pointer transition flex-1" onClick={() => setStep('selfie')}>Back</button>
-            <button className="inline-flex items-center btn-primary justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none flex-1" onClick={handleSubmit} disabled={loading || !pickup || !dropoff || !selfieDataUrl || !passengerOffer || (paymentMethod === 'wallet' && walletBalance !== null && parseFloat(passengerOffer) > walletBalance)}>
-              {loading ? 'Requesting...' : (paymentMethod === 'wallet' && walletBalance !== null && passengerOffer && parseFloat(passengerOffer) > walletBalance) ? 'Insufficient Wallet' : 'Request Ride'}
-            </button>
-          </div>
+           <div className="flex gap-2 mt-6">
+             <button className="bg-transparent border-2 border-border text-text-muted hover:border-pink hover:text-pink inline-flex items-center justify-center gap-1.5 font-body font-semibold text-sm rounded-sm px-5 py-2.5 cursor-pointer transition flex-1" onClick={() => setStep('selfie')}>Back</button>
+             <button className="inline-flex items-center btn-primary justify-center gap-1.5 font-body font-semibold text-sm border-none rounded-sm px-5 py-2.5 cursor-pointer transition no-underline bg-pink text-white hover:bg-pink-dark hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(233,30,140,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none flex-1" onClick={isShared ? () => handleRequestJoin(tripId) : handleSubmit} disabled={loading || !pickup || !dropoff || (!isShared && (!selfieDataUrl || !passengerOffer || (paymentMethod === 'wallet' && walletBalance !== null && parseFloat(passengerOffer) > walletBalance)))}>
+               {loading ? 'Requesting...' : (isShared ? 'Confirm Request' : (paymentMethod === 'wallet' && walletBalance !== null && passengerOffer && parseFloat(passengerOffer) > walletBalance) ? 'Insufficient Wallet' : 'Request Ride')}
+             </button>
+           </div>
         </div>
       )}
     </div>

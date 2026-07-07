@@ -69,9 +69,17 @@ function MapLocationPicker({ onSelect, label, initialPosition: rawPos, otherMark
     mapRef.current = map;
 
     return () => {
-      if (pulseIntervalRef.current) clearInterval(pulseIntervalRef.current);
+      if (pulseIntervalRef.current) {
+        clearInterval(pulseIntervalRef.current);
+        pulseIntervalRef.current = null;
+      }
       map.remove();
       mapRef.current = null;
+      userDotRef.current = null;
+      markerRef.current = null;
+      otherMarkerRef.current = null;
+      polygonLayersRef.current = [];
+      prevPosRef.current = null;
     };
   }, []);
 
@@ -106,7 +114,7 @@ function MapLocationPicker({ onSelect, label, initialPosition: rawPos, otherMark
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-
+    console.log('[MapLocationPicker] userLocation updated:', userLocation);
     if (userLocation) {
       if (userDotRef.current) {
         userDotRef.current.setLatLng([userLocation.lat, userLocation.lng]);

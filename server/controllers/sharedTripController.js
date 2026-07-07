@@ -2,6 +2,7 @@ const { Op } = require('sequelize');
 const User = require('../models/User');
 const SharedTrip = require('../models/SharedTrip');
 const TripRequest = require('../models/TripRequest');
+const Notification = require('../models/Notification');
 const AppError = require('../utils/AppError');
 const catchAsync = require('../utils/catchAsync');
 const logger = require('../utils/logger');
@@ -100,10 +101,14 @@ exports.getAvailableTrips = catchAsync(async (req, res, next) => {
     const pLat = parseFloat(lat);
     const pLng = parseFloat(lng);
     if (!isNaN(pLat) && !isNaN(pLng)) {
+      logger.info(`Filtering ${trips.length} trips for passenger at ${pLat}, ${pLng}`);
       matching = trips.filter((t) => {
         const dist = distanceToLineSegment(pLat, pLng, t.pickupLat, t.pickupLng, t.dropoffLat, t.dropoffLng);
-        return dist <= ROUTE_CORRIDOR_KM;
+        const isMatch = dist <= ROUTE_CORRIDOR_KM;
+        if (isMatch) logger.info(`Trip ${t.id} matches! Dist: ${dist.toFixed(2)}km`);
+        return isMatch;
       });
+      logger.info(`Found ${matching.length} matching trips in corridor`);
     }
   }
 
@@ -201,6 +206,24 @@ exports.requestJoin = catchAsync(async (req, res, next) => {
       dropoffAddress,
       createdAt: request.createdAt,
     });
+
+    try {
+      await Notification.create({
+        userId: trip.driverId,
+        type: 'trip_request',
+        title: 'New Shared Trip Request',
+        message: `${passenger?.name || 'A passenger'} wants to join your shared trip.`,
+        data: { tripId, requestId: request.id },
+      });
+      io.to(`user:${trip.driverId}`).emit('notification:new', {
+        id: `notif-${Date.now()}`,
+        type: 'trip_request',
+        title: 'New Shared Trip Request',
+        message: `${passenger?.name || 'A passenger'} wants to join your shared trip.`,
+        data: { tripId, requestId: request.id },
+        createdAt: new Date().toISOString(),
+      });
+    } catch { /* best-effort */ }
   }
 
   res.status(201).json({
@@ -285,6 +308,24 @@ exports.acceptRequest = catchAsync(async (req, res, next) => {
       availableSeats: trip.availableSeats,
       status: trip.status,
     });
+
+    try {
+      await Notification.create({
+        userId: request.passengerId,
+        type: 'trip_accepted',
+        title: 'Shared Trip Request Accepted',
+        message: `${driver?.name || 'The driver'} has accepted your request to join the shared trip.`,
+        data: { tripId: trip.id, requestId: request.id },
+      });
+      io.to(`user:${request.passengerId}`).emit('notification:new', {
+        id: `notif-${Date.now()}`,
+        type: 'trip_accepted',
+        title: 'Shared Trip Request Accepted',
+        message: `${driver?.name || 'The driver'} has accepted your request to join the shared trip.`,
+        data: { tripId: trip.id, requestId: request.id },
+        createdAt: new Date().toISOString(),
+      });
+    } catch { /* best-effort */ }
   }
 
   res.status(200).json({
@@ -320,6 +361,27 @@ exports.declineRequest = catchAsync(async (req, res, next) => {
       reason: reason || null,
     });
   }
+
+  try {
+    await Notification.create({
+      userId: request.passengerId,
+      type: 'trip_declined',
+      title: 'Shared Trip Request Declined',
+      message: reason ? `The driver declined your request: ${reason}` : 'The driver declined your request to join the shared trip.',
+      data: { tripId: trip.id, requestId: request.id, reason },
+    });
+    const io2 = getIO();
+    if (io2) {
+      io2.to(`user:${request.passengerId}`).emit('notification:new', {
+        id: `notif-${Date.now()}`,
+        type: 'trip_declined',
+        title: 'Shared Trip Request Declined',
+        message: reason ? `The driver declined your request: ${reason}` : 'The driver declined your request to join the shared trip.',
+        data: { tripId: trip.id, requestId: request.id, reason },
+        createdAt: new Date().toISOString(),
+      });
+    }
+  } catch { /* best-effort */ }
 
   res.status(200).json({
     success: true,

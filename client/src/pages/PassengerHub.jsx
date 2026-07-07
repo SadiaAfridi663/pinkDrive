@@ -302,7 +302,13 @@ function PassengerHub() {
               const lat = position?.lat;
               const lng = position?.lng;
               const res = await sharedTripAPI.getAvailable(lat, lng);
-              if (!cancelled) setTrips(res.data.data.trips || []);
+              if (!cancelled) {
+                const trips = (res.data.data.trips || []).map(t => ({
+                  ...t,
+                  tripId: t.tripId || t.id
+                }));
+                setTrips(trips);
+              }
             } catch {
               if (!cancelled) setTrips([]);
             } finally {
@@ -340,7 +346,7 @@ function PassengerHub() {
         const handleJoin = async (tripId) => {
           setJoining(tripId);
           try {
-            navigateHub(`/ride/request`);
+            navigateHub(`/ride/request?tripId=${tripId}`);
           } catch {
           } finally {
             setJoining(null);

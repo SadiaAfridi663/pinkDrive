@@ -3,6 +3,7 @@ const SOSAlert = require('../models/SOSAlert');
 const EmergencyContact = require('../models/EmergencyContact');
 const User = require('../models/User');
 const Ride = require('../models/Ride');
+const Notification = require('../models/Notification');
 const AppError = require('../utils/AppError');
 const catchAsync = require('../utils/catchAsync');
 const logger = require('../utils/logger');
@@ -57,6 +58,27 @@ exports.triggerSOS = catchAsync(async (req, res, next) => {
         relationship: c.relationship,
       })),
     });
+
+    try {
+      const admins = await User.findAll({ where: { role: 'admin' }, attributes: ['id'] });
+      await Promise.all(admins.map(admin =>
+        Notification.create({
+          userId: admin.id,
+          type: 'sos_alert',
+          title: 'SOS Alert',
+          message: `${req.user.name} triggered an SOS alert.`,
+          data: { alertId: alert.id, userId: req.user.id, rideId: ride?.id || null },
+        })
+      ));
+      io.to('admin-room').emit('notification:new', {
+        id: `notif-${Date.now()}`,
+        type: 'sos_alert',
+        title: 'SOS Alert',
+        message: `${req.user.name} triggered an SOS alert.`,
+        data: { alertId: alert.id, userId: req.user.id, rideId: ride?.id || null },
+        createdAt: new Date().toISOString(),
+      });
+    } catch { /* best-effort */ }
   }
 
   logger.warn(`SOS triggered by ${req.user.email} (ride: ${rideId || 'none'})`);

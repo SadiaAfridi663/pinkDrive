@@ -7,6 +7,7 @@ const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
 const DriverDocument = require('../models/DriverDocument');
 const Bid = require('../models/Bid');
+const Notification = require('../models/Notification');
 const AppError = require('../utils/AppError');
 const catchAsync = require('../utils/catchAsync');
 const logger = require('../utils/logger');
@@ -346,6 +347,26 @@ exports.acceptRide = catchAsync(async (req, res, next) => {
     }
   }
 
+  try {
+    await Notification.create({
+      userId: ride.passengerId,
+      type: 'ride_status',
+      title: 'Ride Accepted',
+      message: `${driver?.name || 'A driver'} has accepted your ride and is on the way.`,
+      data: { rideId: ride.id, status: 'accepted' },
+    });
+    if (io) {
+      io.to(`user:${ride.passengerId}`).emit('notification:new', {
+        id: `notif-${Date.now()}`,
+        type: 'ride_status',
+        title: 'Ride Accepted',
+        message: `${driver?.name || 'A driver'} has accepted your ride.`,
+        data: { rideId: ride.id, status: 'accepted' },
+        createdAt: new Date().toISOString(),
+      });
+    }
+  } catch { /* best-effort */ }
+
   const profileDoc = await DriverDocument.findOne({
     where: { userId: req.user.id, documentType: 'profile_photo' },
   });
@@ -511,6 +532,34 @@ exports.updateRideStatus = catchAsync(async (req, res, next) => {
     io.to(`ride:${ride.id}`).emit('ride:status', { rideId: ride.id, status: targetStatus, checkoutUrl });
   }
 
+  const statusLabels = {
+    arrived: 'Driver has arrived at your pickup location',
+    in_progress: 'Your ride is in progress',
+    awaiting_payment: 'Ride completed. Payment is pending.',
+    completed: 'Ride completed successfully',
+  };
+  if (statusLabels[targetStatus]) {
+    try {
+      await Notification.create({
+        userId: ride.passengerId,
+        type: 'ride_status',
+        title: `Ride ${targetStatus.replace(/_/g, ' ')}`,
+        message: statusLabels[targetStatus],
+        data: { rideId: ride.id, status: targetStatus },
+      });
+      if (io) {
+        io.to(`user:${ride.passengerId}`).emit('notification:new', {
+          id: `notif-${Date.now()}`,
+          type: 'ride_status',
+          title: `Ride ${targetStatus.replace(/_/g, ' ')}`,
+          message: statusLabels[targetStatus],
+          data: { rideId: ride.id, status: targetStatus },
+          createdAt: new Date().toISOString(),
+        });
+      }
+    } catch { /* best-effort */ }
+  }
+
   logger.info(`Ride ${ride.id} status updated to ${targetStatus} by driver ${req.user.email}`);
 
   res.status(200).json({
@@ -580,6 +629,26 @@ exports.confirmPayment = catchAsync(async (req, res, next) => {
     io.to(`ride:${ride.id}`).emit('ride:status', { rideId: ride.id, status: 'completed' });
   }
 
+  try {
+    await Notification.create({
+      userId: ride.passengerId,
+      type: 'ride_status',
+      title: 'Payment Confirmed',
+      message: 'Your payment has been confirmed. Ride completed.',
+      data: { rideId: ride.id, status: 'completed' },
+    });
+    if (io) {
+      io.to(`user:${ride.passengerId}`).emit('notification:new', {
+        id: `notif-${Date.now()}`,
+        type: 'ride_status',
+        title: 'Payment Confirmed',
+        message: 'Your payment has been confirmed. Ride completed.',
+        data: { rideId: ride.id, status: 'completed' },
+        createdAt: new Date().toISOString(),
+      });
+    }
+  } catch { /* best-effort */ }
+
   sendRideReceiptToPassenger(ride.id);
   sendDriverRideCompleted(ride.id);
 
@@ -641,6 +710,26 @@ exports.acknowledgePayment = catchAsync(async (req, res, next) => {
   if (io) {
     io.to(`ride:${ride.id}`).emit('ride:status', { rideId: ride.id, status: 'completed' });
   }
+
+  try {
+    await Notification.create({
+      userId: ride.driverId,
+      type: 'ride_status',
+      title: 'Payment Acknowledged',
+      message: 'Passenger has confirmed payment. Ride completed.',
+      data: { rideId: ride.id, status: 'completed' },
+    });
+    if (io) {
+      io.to(`user:${ride.driverId}`).emit('notification:new', {
+        id: `notif-${Date.now()}`,
+        type: 'ride_status',
+        title: 'Payment Acknowledged',
+        message: 'Passenger has confirmed payment. Ride completed.',
+        data: { rideId: ride.id, status: 'completed' },
+        createdAt: new Date().toISOString(),
+      });
+    }
+  } catch { /* best-effort */ }
 
   sendRideReceiptToPassenger(ride.id);
   sendDriverRideCompleted(ride.id);
@@ -744,6 +833,24 @@ exports.acceptOffer = catchAsync(async (req, res, next) => {
     status: 'accepted',
   });
 
+  try {
+    await Notification.create({
+      userId: bid.driverId,
+      type: 'ride_status',
+      title: 'Offer Accepted',
+      message: 'Your offer has been accepted! You are now assigned to this ride.',
+      data: { rideId: ride.id, bidId: bid.id, status: 'accepted' },
+    });
+    io.to(`user:${bid.driverId}`).emit('notification:new', {
+      id: `notif-${Date.now()}`,
+      type: 'ride_status',
+      title: 'Offer Accepted',
+      message: 'Your offer has been accepted! You are now assigned to this ride.',
+      data: { rideId: ride.id, bidId: bid.id, status: 'accepted' },
+      createdAt: new Date().toISOString(),
+    });
+  } catch { /* best-effort */ }
+
   logger.info(`Offer ${bid.id} accepted for ride ${ride.id}, driver ${bid.driverId}, amount ${bid.amount}`);
 
   res.status(200).json({
@@ -782,6 +889,28 @@ exports.cancelRide = catchAsync(async (req, res, next) => {
   const io = getIO();
   if (io) {
     io.to(`ride:${ride.id}`).emit('ride:status', { rideId: ride.id, status: 'cancelled' });
+  }
+
+  if (ride.driverId) {
+    try {
+      await Notification.create({
+        userId: ride.driverId,
+        type: 'ride_status',
+        title: 'Ride Cancelled',
+        message: 'The passenger has cancelled the ride.',
+        data: { rideId: ride.id, status: 'cancelled' },
+      });
+      if (io) {
+        io.to(`user:${ride.driverId}`).emit('notification:new', {
+          id: `notif-${Date.now()}`,
+          type: 'ride_status',
+          title: 'Ride Cancelled',
+          message: 'The passenger has cancelled the ride.',
+          data: { rideId: ride.id, status: 'cancelled' },
+          createdAt: new Date().toISOString(),
+        });
+      }
+    } catch { /* best-effort */ }
   }
 
   logger.info(`Ride ${ride.id} cancelled by passenger ${req.user.email}`);

@@ -1,12 +1,14 @@
 const { Op } = require('sequelize');
 const User = require('../models/User');
 const DriverDocument = require('../models/DriverDocument');
+const Notification = require('../models/Notification');
 const AppError = require('../utils/AppError');
 const catchAsync = require('../utils/catchAsync');
 const logger = require('../utils/logger');
 const fs = require('fs');
 const path = require('path');
 const { fileToUrl } = require('../utils/geo');
+const { getIO } = require('../sockets');
 
 exports.uploadDocuments = catchAsync(async (req, res, next) => {
   const driver = await User.findByPk(req.user.id);
@@ -34,6 +36,39 @@ exports.uploadDocuments = catchAsync(async (req, res, next) => {
       status: 'pending',
     });
     docs.push(doc);
+  }
+
+  // Notify admins about document upload
+  try {
+    const admins = await User.findAll({ where: { role: 'admin' }, attributes: ['id'] });
+    const driver = await User.findByPk(req.user.id, { attributes: ['name', 'email'] });
+    
+    const notificationData = {
+      type: 'verification_request',
+      title: 'New Verification Documents',
+      message: `${driver?.name || 'A driver'} has uploaded documents for verification.`,
+      data: { userId: req.user.id },
+    };
+
+    await Promise.all([
+      ...admins.map(admin => Notification.create({
+        userId: admin.id,
+        ...notificationData
+      })),
+      // Emit to all admins in the admin-room
+      (async () => {
+        const io = getIO();
+        if (io) io.to('admin-room').emit('notification:new', {
+          ...notificationData,
+          id: `notif-${Date.now()}`, // temporary ID for frontend
+          createdAt: new Date().toISOString(),
+        });
+      })()
+    ]);
+    logger.info(`Admin notifications sent for driver ${req.user.email}`);
+  } catch (err) {
+    logger.error(`Notification error: ${err.message}`);
+    // Non-blocking error
   }
 
   logger.info(`Driver ${req.user.email} uploaded ${docs.length} document(s)`);
