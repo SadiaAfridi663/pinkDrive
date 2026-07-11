@@ -11,6 +11,8 @@ const {
   acceptRequest,
   declineRequest,
   cancelTrip,
+  updateTripStatus,
+  getAcceptedPassengers,
 } = require('../controllers/sharedTripController');
 
 const router = express.Router();
@@ -58,6 +60,7 @@ router.post(
     body('pickupLng').isFloat().withMessage('Pickup longitude required.'),
     body('dropoffLat').isFloat().withMessage('Dropoff latitude required.'),
     body('dropoffLng').isFloat().withMessage('Dropoff longitude required.'),
+    handleValidation,
   ],
   requestJoin,
 );
@@ -65,6 +68,9 @@ router.post(
 router.get('/:tripId/requests', authorize('driver'), getTripRequests);
 
 router.patch('/:tripId/cancel', authorize('driver'), cancelTrip);
+
+router.patch('/:tripId/status', authorize('driver'), updateTripStatus);
+router.get('/:tripId/accepted-passengers', authorize('driver'), getAcceptedPassengers);
 
 const requestRouter = express.Router();
 requestRouter.patch('/:requestId/accept', authorize('driver'), acceptRequest);

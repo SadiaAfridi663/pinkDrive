@@ -44,6 +44,15 @@ function setupSocketHandlers(io) {
     socket.on('driver:ready', async () => {
       if (socket.user.role !== 'driver' || !socket.user.isDriverVerified) return;
       try {
+        const SharedTrip = require('../models/SharedTrip');
+        const activeShared = await SharedTrip.findOne({
+          where: { driverId: socket.user.id, status: { [Op.in]: ['active', 'full', 'in_progress'] } },
+        });
+        if (activeShared) {
+          logger.info(`Driver ${socket.user.email} has active shared trip — skipping ride requests`);
+          return;
+        }
+
         const pendingRides = await Ride.findAll({
           where: { status: 'pending', driverId: null },
           attributes: ['id', 'pickupLat', 'pickupLng', 'pickupAddress', 'dropoffLat', 'dropoffLng', 'dropoffAddress', 'distance', 'passengerOffer', 'createdAt'],
@@ -128,9 +137,9 @@ function setupSocketHandlers(io) {
           try {
             const ride = await Ride.findByPk(rideId, { attributes: ['id', 'status', 'pickupLat', 'pickupLng'] });
             if (ride && ride.status === 'accepted') {
-               const distanceToPickup = haversineDistance(lat, lng, ride.pickupLat, ride.pickupLng) * 1000;
-               if (distanceToPickup <= 200) {
-                 ride.status = 'arrived';
+              const distanceToPickup = haversineDistance(lat, lng, ride.pickupLat, ride.pickupLng) * 1000;
+              if (distanceToPickup <= 200) {
+                ride.status = 'arrived';
                 await ride.save();
                 logger.info(`Ride ${rideId} auto-arrived — driver within ${Math.round(distanceToPickup)}m of pickup`);
                 io.to(`ride:${rideId}`).emit('ride:status', { rideId, status: 'arrived' });
@@ -181,6 +190,15 @@ function setupSocketHandlers(io) {
         });
         if (activeDriverRide) {
           socket.emit('offer:error', { message: 'You already have an active ride.' });
+          return;
+        }
+
+        const SharedTrip = require('../models/SharedTrip');
+        const activeSharedTrip = await SharedTrip.findOne({
+          where: { driverId: socket.user.id, status: { [Op.in]: ['active', 'full', 'in_progress'] } },
+        });
+        if (activeSharedTrip) {
+          socket.emit('offer:error', { message: 'You have an active shared trip. Cancel it first to accept private rides.' });
           return;
         }
 
@@ -272,6 +290,15 @@ function setupSocketHandlers(io) {
       if (socket.user.role === 'passenger') {
         socket.join(`passenger:${socket.user.id}`);
       }
+    });
+
+    // Join/leave shared trip room for real-time updates
+    socket.on('join:trip', (tripId) => {
+      socket.join(`trip:${tripId}`);
+    });
+
+    socket.on('leave:trip', (tripId) => {
+      socket.leave(`trip:${tripId}`);
     });
 
     socket.on('disconnect', () => {

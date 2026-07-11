@@ -110,7 +110,7 @@ function DashboardView() {
   );
 
   return (
-    <div className="p-5 lg:p-8 max-w-4xl">
+    <div className="p-5 lg:p-8 w-[70%]">
       <div className="flex items-center justify-between mb-7">
         <div>
           <h2 className="text-xl lg:text-2xl font-bold text-[#880E4F] m-0">{greeting}, {nameFirst}</h2>
@@ -233,7 +233,7 @@ function DashboardView() {
             </div>
 
             <button
-              className="w-full bg-amber-500 text-white font-bold text-sm py-3.5 rounded-xl hover:bg-amber-600 transition cursor-pointer border-none shadow-sm"
+              className="w-36 bg-amber-500 text-white font-bold text-sm py-3.5 rounded-xl hover:bg-amber-600 transition cursor-pointer border-none shadow-sm"
               onClick={() => navigate(`/shared-trip/${activeSharedRequest.id}`)}
             >
               View Shared Trip
@@ -287,7 +287,7 @@ function DashboardView() {
                   <p className="text-xs text-[#8B8B9E] m-0 truncate"><AddressLabel address={r.dropoffAddress} lat={r.dropoffLat} lng={r.dropoffLng} /></p>
                   <p className="text-[0.6rem] text-[#B0B0C0] m-0 mt-0.5">{r.distance ? `${r.distance} km` : ''}{r.fare ? ` · ${r.fare} PKR` : ''} · {new Date(r.createdAt).toLocaleDateString()}</p>
                 </div>
-                <svg className="w-4 h-4 text-[#B0B0C0] flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+                <svg className="w-4 h-4 text-[#B0B0C0] flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6" /></svg>
               </div>
             ))}
           </div>
@@ -315,7 +315,7 @@ function PassengerHub() {
       icon: 'carPlus',
       component: () => {
         const RideSheet = () => (
-          <div className="p-5 lg:p-8 max-w-2xl">
+          <div className="p-5 lg:p-8 w-1/2">
             <div className="bg-white rounded-2xl border border-[#F0E0E8] p-8 text-center shadow-sm">
               <div className="mx-auto mb-5 w-20 h-20 bg-[#FCE4EC] rounded-full flex items-center justify-center">
                 <svg className="w-10 h-10 text-[#E91E8C]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M5 17h14M5 12h14M5 7h14" /></svg>
@@ -371,223 +371,6 @@ function PassengerHub() {
         );
       },
     },
-    'shared-trips': {
-      label: 'Shared Trips',
-      subtitle: 'Trips available along your area',
-      icon: 'carPlus',
-      component: () => {
-        const [trips, setTrips] = useState([]);
-        const [loading, setLoading] = useState(true);
-        const [joining, setJoining] = useState(null);
-        const [requestedTripIds, setRequestedTripIds] = useState(new Set());
-        const [profileModal, setProfileModal] = useState(null);
-        const navigateHub = useNavigate();
-        const { position } = useGeolocation();
-        const { socket } = useSocket();
-
-        useEffect(() => {
-          let cancelled = false;
-          const fetch = async () => {
-            try {
-              const lat = position?.lat;
-              const lng = position?.lng;
-              const [availRes, myReqsRes] = await Promise.all([
-                sharedTripAPI.getAvailable(lat, lng),
-                sharedTripAPI.getMyRequests().catch(() => ({ data: { data: { requests: [] } } })),
-              ]);
-              if (!cancelled) {
-                const trips = (availRes.data.data.trips || []).map(t => ({
-                  ...t,
-                  tripId: t.tripId || t.id
-                }));
-                setTrips(trips);
-                const myReqs = myReqsRes.data.data.requests || [];
-                const ids = new Set(
-                  myReqs
-                    .filter(r => r.status === 'pending' || r.status === 'accepted')
-                    .map(r => r.tripId)
-                );
-                setRequestedTripIds(ids);
-              }
-            } catch {
-              if (!cancelled) setTrips([]);
-            } finally {
-              if (!cancelled) setLoading(false);
-            }
-          };
-          fetch();
-          return () => { cancelled = true; };
-        }, [position]);
-
-        useEffect(() => {
-          if (!socket) return;
-          const handleTripCreated = (data) => {
-            setTrips((prev) => {
-              if (prev.find((t) => t.tripId === data.tripId)) return prev;
-              return [{ ...data, tripId: data.tripId || data.id }, ...prev];
-            });
-          };
-          const handleSeatsUpdate = (data) => {
-            setTrips((prev) => prev.map((t) =>
-              t.tripId === data.tripId
-                ? { ...t, availableSeats: data.availableSeats, status: data.status }
-                : t
-            ));
-          };
-          const handleRequestAccepted = (data) => {
-            navigateHub(`/shared-trip/${data.requestId}`);
-          };
-          socket.on('trip:created', handleTripCreated);
-          socket.on('trip:seats:update', handleSeatsUpdate);
-          socket.on('trip:request:accepted', handleRequestAccepted);
-          socket.emit('trip:passenger:listen');
-          return () => {
-            socket.off('trip:created', handleTripCreated);
-            socket.off('trip:seats:update', handleSeatsUpdate);
-            socket.off('trip:request:accepted', handleRequestAccepted);
-          };
-        }, [socket]);
-
-        const handleJoin = async (tripId) => {
-          setJoining(tripId);
-          try {
-            navigateHub(`/ride/request?tripId=${tripId}`);
-          } catch {
-          } finally {
-            setJoining(null);
-          }
-        };
-
-        const filteredTrips = trips.filter(t => !requestedTripIds.has(t.tripId));
-
-        if (loading) return <div className="p-5 lg:p-8 animate-pulse"><div className="h-8 bg-gray-200 rounded-lg w-1/3" /></div>;
-
-        return (
-          <div className="p-5 lg:p-8 max-w-4xl w-full">
-            {profileModal && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setProfileModal(null)}>
-                <div className="bg-white rounded-2xl p-8 max-w-sm w-full mx-4 shadow-xl border border-[#F0E0E8]" onClick={e => e.stopPropagation()}>
-                  <div className="text-center">
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-amber-100 to-amber-200 flex items-center justify-center text-3xl font-bold text-amber-600 mx-auto mb-4 border-2 border-amber-200 overflow-hidden">
-                      {profileModal.driverPhoto ? (
-                        <img src={`${API_URL}/${profileModal.driverPhoto.replace(/\\/g, '/')}`} alt="" className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.textContent = profileModal.driverName?.[0] || 'D'; }} />
-                      ) : (
-                        profileModal.driverName?.[0] || 'D'
-                      )}
-                    </div>
-                    <h3 className="text-xl font-bold text-[#1A1A1A] m-0 mb-1">{profileModal.driverName || 'Driver'}</h3>
-                    {profileModal.driverPhone && (
-                      <p className="text-sm text-[#8B8B9E] m-0 mb-4">{profileModal.driverPhone}</p>
-                    )}
-                    <button
-                      onClick={() => setProfileModal(null)}
-                      className="mt-2 bg-white border border-[#F0E0E8] text-[#880E4F] font-semibold text-sm py-2.5 px-8 rounded-xl hover:border-[#E91E8C] hover:bg-[#FFF8FA] transition cursor-pointer w-full"
-                    >
-                      Close
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <p className="text-xs font-bold text-[#8B8B9E] uppercase tracking-wider m-0">Available Shared Trips</p>
-                <p className="text-[0.6rem] text-[#B0B0C0] m-0 mt-0.5">Trips along your location</p>
-              </div>
-              <button
-                onClick={() => navigateHub('/ride/request')}
-                className="bg-[#E91E8C] text-white text-xs font-bold py-2 px-4 rounded-xl hover:bg-[#C2185B] transition cursor-pointer border-none"
-              >
-                Book Private Ride
-              </button>
-            </div>
-
-            {filteredTrips.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-[#F0E0E8] p-10 text-center shadow-sm">
-                <div className="mx-auto mb-4 w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center">
-                  <svg className="w-8 h-8 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 14l2-5h14l2 5" /><path d="M5 14v3a1 1 0 001 1h2a1 1 0 001-1v-1" /><path d="M15 17a1 1 0 001 1h2a1 1 0 001-1v-1" /></svg>
-                </div>
-                <h3 className="text-lg font-bold text-[#880E4F] m-0 mb-2">No Shared Trips Yet</h3>
-                <p className="text-sm text-[#8B8B9E] m-0 max-w-sm mx-auto">No drivers have created shared trips along your route yet. Book a private ride instead.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {filteredTrips.map((trip) => (
-                  <div
-                    key={trip.tripId}
-                    className="bg-white rounded-2xl border border-[#F0E0E8] overflow-hidden shadow-sm hover:border-amber-300 hover:shadow-md transition-all"
-                  >
-                    <div className="p-5">
-                      <div className="flex items-center gap-4 mb-4">
-                        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-amber-100 to-amber-200 flex items-center justify-center text-xl font-bold text-amber-600 flex-shrink-0 border-2 border-amber-200 overflow-hidden">
-                          {trip.driverPhoto ? (
-                            <img src={`${API_URL}/${trip.driverPhoto.replace(/\\/g, '/')}`} alt="" className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.textContent = trip.driverName?.[0] || 'D'; }} />
-                          ) : (
-                            trip.driverName?.[0] || 'D'
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-base font-bold text-[#1A1A1A] m-0">{trip.driverName || 'Driver'}</p>
-                          <div className="flex items-center gap-2 text-xs text-[#8B8B9E] mt-0.5">
-                            <span>{new Date(trip.departureTime).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                            <span className="w-1 h-1 rounded-full bg-[#F0E0E8]" />
-                            <span className="font-semibold text-amber-700">{trip.paymentMethod === 'wallet' ? 'Wallet' : 'Cash'}</span>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-2xl font-bold text-amber-700 font-mono m-0">{trip.pricePerSeat} PKR</p>
-                          <p className="text-[0.55rem] text-[#8B8B9E] m-0">per seat</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 mb-4">
-                        <button
-                          onClick={() => setProfileModal({ driverName: trip.driverName, driverPhoto: trip.driverPhoto, driverPhone: trip.driverPhone })}
-                          className="text-xs font-semibold text-[#880E4F] bg-white border border-[#F0E0E8] rounded-lg px-3 py-1.5 hover:border-[#E91E8C] hover:bg-[#FFF8FA] transition cursor-pointer"
-                        >
-                          View Profile
-                        </button>
-                      </div>
-
-                      <div className="bg-[#FFF8FA] rounded-xl px-4 py-3 mb-4 space-y-2">
-                        <div className="flex items-center gap-3 text-sm">
-                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 flex-shrink-0" />
-                          <span className="truncate text-[#1A1A1A]">{trip.pickupAddress || `${trip.pickupLat?.toFixed(4)}, ${trip.pickupLng?.toFixed(4)}`}</span>
-                        </div>
-                        <div className="flex items-center gap-3 text-sm">
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#1A1A1A] flex-shrink-0" />
-                          <span className="truncate text-[#1A1A1A]">{trip.dropoffAddress || `${trip.dropoffLat?.toFixed(4)}, ${trip.dropoffLng?.toFixed(4)}`}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold">
-                            <span className="relative flex w-2.5 h-2.5">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-                              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500" />
-                            </span>
-                            {trip.availableSeats} {trip.availableSeats === 1 ? 'seat' : 'seats'} left
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => handleJoin(trip.tripId)}
-                          disabled={joining === trip.tripId}
-                          className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm py-2.5 px-6 rounded-xl transition cursor-pointer border-none disabled:opacity-50"
-                        >
-                          {joining === trip.tripId ? 'Opening...' : 'Book a Seat'}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      },
-    },
     'my-shared-trips': {
       label: 'My Shared Trips',
       subtitle: 'Your shared trip requests',
@@ -611,7 +394,7 @@ function PassengerHub() {
           const refresh = () => {
             sharedTripAPI.getMyRequests()
               .then(res => setRequests(res.data.data.requests || []))
-              .catch(() => {});
+              .catch(() => { });
           };
           socket.on('trip:request:accepted', refresh);
           socket.on('trip:request:declined', refresh);

@@ -9,7 +9,7 @@ const logger = require('../utils/logger');
 const { reverseGeocode, haversineDistance, distanceToLineSegment, fileToUrl } = require('../utils/geo');
 const { getIO } = require('../sockets');
 
-const ROUTE_CORRIDOR_KM = 5;
+const ROUTE_CORRIDOR_KM = 10;
 
 exports.createTrip = catchAsync(async (req, res, next) => {
   const { pickupLat, pickupLng, dropoffLat, dropoffLng, departureTime, availableSeats, pricePerSeat, paymentMethod } = req.body;
@@ -19,7 +19,7 @@ exports.createTrip = catchAsync(async (req, res, next) => {
   }
 
   const activeRide = await SharedTrip.findOne({
-    where: { driverId: req.user.id, status: { [Op.in]: ['active'] } },
+    where: { driverId: req.user.id, status: { [Op.in]: ['active', 'full', 'in_progress'] } },
   });
   if (activeRide) {
     return next(new AppError('You already have an active shared trip. Complete or cancel it first.', 400));
@@ -82,7 +82,7 @@ exports.createTrip = catchAsync(async (req, res, next) => {
 });
 
 exports.getAvailableTrips = catchAsync(async (req, res, next) => {
-  const { lat, lng } = req.query;
+  const { lat, lng, dropoffLat, dropoffLng } = req.query;
 
   const trips = await SharedTrip.findAll({
     where: { status: 'active', departureTime: { [Op.gte]: new Date() } },
@@ -97,19 +97,26 @@ exports.getAvailableTrips = catchAsync(async (req, res, next) => {
   const driverMap = Object.fromEntries(drivers.map((d) => [d.id, d]));
 
   let matching = trips;
-  if (lat && lng) {
+  if (lat && lng && dropoffLat && dropoffLng) {
     const pLat = parseFloat(lat);
     const pLng = parseFloat(lng);
-    if (!isNaN(pLat) && !isNaN(pLng)) {
-      logger.info(`Filtering ${trips.length} trips for passenger at ${pLat}, ${pLng}`);
+    const dLat = parseFloat(dropoffLat);
+    const dLng = parseFloat(dropoffLng);
+    if (!isNaN(pLat) && !isNaN(pLng) && !isNaN(dLat) && !isNaN(dLng)) {
+      logger.info(`Filtering ${trips.length} trips for passenger route ${pLat},${pLng} → ${dLat},${dLng}`);
       matching = trips.filter((t) => {
-        const dist = distanceToLineSegment(pLat, pLng, t.pickupLat, t.pickupLng, t.dropoffLat, t.dropoffLng);
-        const isMatch = dist <= ROUTE_CORRIDOR_KM;
-        if (isMatch) logger.info(`Trip ${t.id} matches! Dist: ${dist.toFixed(2)}km`);
+        const distPickup = distanceToLineSegment(pLat, pLng, t.pickupLat, t.pickupLng, t.dropoffLat, t.dropoffLng);
+        const distDropoff = distanceToLineSegment(dLat, dLng, t.pickupLat, t.pickupLng, t.dropoffLat, t.dropoffLng);
+        const isMatch = distPickup <= ROUTE_CORRIDOR_KM || distDropoff <= ROUTE_CORRIDOR_KM;
+        if (isMatch) logger.info(`Trip ${t.id} matches! Pickup dist: ${distPickup.toFixed(2)}km, dropoff dist: ${distDropoff.toFixed(2)}km`);
         return isMatch;
       });
       logger.info(`Found ${matching.length} matching trips in corridor`);
+    } else {
+      logger.warn(`Invalid coords: lat=${lat} lng=${lng} dropoffLat=${dropoffLat} dropoffLng=${dropoffLng}`);
     }
+  } else {
+    logger.warn(`Missing coords — returning all ${trips.length} active trips. lat=${lat} lng=${lng} dropoffLat=${dropoffLat} dropoffLng=${dropoffLng}`);
   }
 
   const data = matching.map((t) => {
@@ -447,4 +454,68 @@ exports.cancelTrip = catchAsync(async (req, res, next) => {
   logger.info(`SharedTrip ${tripId} cancelled by driver ${req.user.email}`);
 
   res.status(200).json({ success: true, message: 'Trip cancelled.' });
+});
+
+const TRIP_STATUS_FLOW = ['active', 'full', 'in_progress', 'completed'];
+
+exports.updateTripStatus = catchAsync(async (req, res, next) => {
+  const { tripId } = req.params;
+  const { status } = req.body;
+
+  if (!status) return next(new AppError('Status is required.', 400));
+
+  const trip = await SharedTrip.findByPk(tripId);
+  if (!trip) return next(new AppError('Trip not found.', 404));
+  if (trip.driverId !== req.user.id) return next(new AppError('Unauthorized.', 403));
+
+  const currentIdx = TRIP_STATUS_FLOW.indexOf(trip.status);
+  const nextIdx = TRIP_STATUS_FLOW.indexOf(status);
+  if (currentIdx === -1 || nextIdx === -1 || nextIdx <= currentIdx) {
+    return next(new AppError(`Invalid status transition from ${trip.status} to ${status}.`, 400));
+  }
+
+  trip.status = status;
+  if (status === 'in_progress' && !trip.startedAt) trip.startedAt = new Date();
+  if (status === 'completed') trip.completedAt = new Date();
+  await trip.save();
+
+  logger.info(`SharedTrip ${tripId} status updated to ${status} by driver ${req.user.email}`);
+
+  const io = getIO();
+  if (io) {
+    io.to(`trip:${tripId}`).emit('trip:status', { tripId, status, startedAt: trip.startedAt, completedAt: trip.completedAt });
+  }
+
+  res.status(200).json({ success: true, data: { trip }, message: `Trip ${status}.` });
+});
+
+exports.getAcceptedPassengers = catchAsync(async (req, res, next) => {
+  const { tripId } = req.params;
+
+  const trip = await SharedTrip.findByPk(tripId);
+  if (!trip) return next(new AppError('Trip not found.', 404));
+  if (trip.driverId !== req.user.id) return next(new AppError('Unauthorized.', 403));
+
+  const requests = await TripRequest.findAll({
+    where: { tripId, status: 'accepted' },
+  });
+
+  const passengerIds = [...new Set(requests.map((r) => r.passengerId))];
+  const passengers = passengerIds.length > 0 ? await User.findAll({
+    where: { id: passengerIds },
+    attributes: ['id', 'name', 'profilePhoto', 'phone'],
+  }) : [];
+  const passengerMap = Object.fromEntries(passengers.map((p) => [p.id, p]));
+
+  const data = requests.map((r) => {
+    const p = passengerMap[r.passengerId];
+    return {
+      ...r.toJSON(),
+      passengerName: p?.name,
+      passengerPhoto: p?.profilePhoto ? fileToUrl(p.profilePhoto) : null,
+      passengerPhone: p?.phone,
+    };
+  });
+
+  res.status(200).json({ success: true, data: { passengers: data } });
 });

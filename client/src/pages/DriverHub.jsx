@@ -171,6 +171,46 @@ function DashboardView() {
       )}
 
       {isVerified && (
+        (() => {
+          const activeTrip = sharedTrips.find(t => t.status === 'active' || t.status === 'full' || t.status === 'in_progress');
+          if (!activeTrip) return null;
+          return (
+            <div className="bg-white rounded-2xl border border-[#F0E0E8] overflow-hidden shadow-sm mb-6">
+              <div className="p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-bold text-[#8B8B9E] uppercase tracking-wider m-0">Active Shared Trip</h3>
+                  <span className={`text-[0.55rem] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${activeTrip.status === 'in_progress' ? 'bg-blue-50 text-blue-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                    {activeTrip.status.replace(/_/g, ' ')}
+                  </span>
+                </div>
+                <div className="text-xs text-[#8B8B9E] mb-3">
+                  {activeTrip.pickupAddress || `${activeTrip.pickupLat?.toFixed(4)}, ${activeTrip.pickupLng?.toFixed(4)}`} → {activeTrip.dropoffAddress || `${activeTrip.dropoffLat?.toFixed(4)}, ${activeTrip.dropoffLng?.toFixed(4)}`}
+                </div>
+                <div className="mb-3 rounded-xl overflow-hidden border border-[#F0E0E8]">
+                  <RideRouteMap
+                    pickup={{ lat: activeTrip.pickupLat, lng: activeTrip.pickupLng }}
+                    dropoff={{ lat: activeTrip.dropoffLat, lng: activeTrip.dropoffLng }}
+                    height="160px"
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-[#8B8B9E]">
+                    <span className="font-bold text-[#1A1A1A]">{activeTrip.pricePerSeat} PKR</span> · {activeTrip.availableSeats} seats
+                  </div>
+                  <button
+                    onClick={() => navigate(`/driver/shared-trip/${activeTrip.id}`)}
+                    className="bg-amber-500 text-white font-bold text-xs py-2 px-5 rounded-xl hover:bg-amber-600 transition cursor-pointer border-none"
+                  >
+                    Manage Trip
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()
+      )}
+
+      {isVerified && (
         <>
           <h3 className="text-xs font-bold text-[#8B8B9E] uppercase tracking-wider m-0 mb-4">Quick Actions</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -419,7 +459,7 @@ function DriverHub() {
 
   const baseViews = {
     dashboard: { label: 'Dashboard', subtitle: 'Earnings at a glance', icon: 'dashboard', component: DashboardView },
-    documents: { label: 'Documents', subtitle: 'Verification documents', icon: 'fileCheck', component: DriverVerification },
+    ...(!isVerified ? { documents: { label: 'Documents', subtitle: 'Verification documents', icon: 'fileCheck', component: DriverVerification } } : {}),
   };
 
   const verifiedViews = {

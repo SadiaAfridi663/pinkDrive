@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useContext } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { rideAPI, serviceAreaAPI, paymentsAPI, walletAPI, sharedTripAPI } from '../services/api';
 import MapLocationPicker from '../components/MapLocationPicker';
@@ -8,6 +8,7 @@ import SelfieCapture from '../components/SelfieCapture';
 import LocationGate from '../components/LocationGate';
 import useGeolocation from '../hooks/useGeolocation';
 import { reverseGeocode } from '../utils/geocode';
+import { AuthContext } from '../context/AuthContext';
 
 const FARE_PER_KM = 50;
 
@@ -31,12 +32,13 @@ function RequestRideInner() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [sharedTrips, setSharedTrips] = useState([]);
-  const [loadingShared, setLoadingShared] = useState(false);
   const [selectedTrip, setSelectedTrip] = useState(null);
+  const [detailTrip, setDetailTrip] = useState(null);
   const [activeBlock, setActiveBlock] = useState(null);
   const [activeRequestId, setActiveRequestId] = useState(null);
   const navigate = useNavigate();
   const { position } = useGeolocation();
+  const { user } = useContext(AuthContext);
 
   useEffect(() => {
     let cancelled = false;
@@ -142,7 +144,7 @@ function RequestRideInner() {
     let cancelled = false;
     const fetch = async () => {
       try {
-        const res = await sharedTripAPI.getAvailable(pickup.lat, pickup.lng);
+        const res = await sharedTripAPI.getAvailable(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng);
         if (!cancelled) {
           const trips = (res.data.data.trips || []).map(t => ({
             ...t,
@@ -150,8 +152,12 @@ function RequestRideInner() {
           }));
           setSharedTrips(trips);
         }
-      } catch {
-        if (!cancelled) setSharedTrips([]);
+      } catch (err) {
+        console.error('[RequestRide] Failed to fetch shared trips:', err.response?.data || err.message);
+        if (!cancelled) {
+          setSharedTrips([]);
+          setError(err.response?.data?.message || 'Could not check shared trips along your route.');
+        }
       }
     };
     fetch();
@@ -170,7 +176,9 @@ function RequestRideInner() {
       });
       navigate('/passenger');
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to join shared trip.');
+      const msg = err.response?.data?.message || 'Failed to join shared trip.';
+      console.error('[RequestRide] Join shared trip failed:', err.response?.status, err.response?.data);
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -333,7 +341,7 @@ function RequestRideInner() {
             otherMarker={pickup}
             userLocation={position}
           />
-          {dropoff && (
+              {dropoff && (
             <div className="mt-3">
               <p className="text-xs text-text-muted mt-1.5 truncate max-w-full">
                 {dropoffAddress || `Drop-off: ${dropoff.lat.toFixed(4)}, ${dropoff.lng.toFixed(4)}`}
@@ -356,8 +364,7 @@ function RequestRideInner() {
                     {sharedTrips.map((trip) => (
                       <div
                         key={trip.tripId}
-                        className="bg-gradient-to-br from-amber-50 to-white rounded-xl border border-amber-200 p-4 hover:shadow-md hover:border-amber-300 transition-all cursor-pointer"
-                        onClick={() => handleRequestJoin(trip.tripId)}
+                        className="bg-gradient-to-br from-amber-50 to-white rounded-xl border border-amber-200 p-4 hover:shadow-md hover:border-amber-300 transition-all"
                       >
                         <div className="flex items-center gap-3 mb-3">
                           <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-100 to-amber-200 flex items-center justify-center text-lg font-bold text-amber-600 flex-shrink-0 border-2 border-amber-300 overflow-hidden">
@@ -376,7 +383,7 @@ function RequestRideInner() {
                             <p className="text-[0.55rem] text-[#8B8B9E] m-0">per seat</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-[#8B8B9E] mb-2">
+                        <div className="flex items-center gap-2 text-xs text-[#8B8B9E] mb-3">
                           <span className="flex items-center gap-1">
                             <svg className="w-3 h-3 text-amber-500" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="17" r="2" /><circle cx="19" cy="17" r="2" /><path d="M5 17h14M5 12h14M5 7h14" /></svg>
                             <AddressLabel address={trip.pickupAddress} lat={0} lng={0} />
@@ -400,17 +407,31 @@ function RequestRideInner() {
                               {new Date(trip.departureTime).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                             </span>
                           </div>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleRequestJoin(trip.tripId); }}
-                            className="bg-amber-500 text-white text-xs font-bold py-2 px-4 rounded-lg hover:bg-amber-600 transition cursor-pointer border-none"
-                          >
-                            Request to Join
-                          </button>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setDetailTrip(trip); }}
+                              className="bg-white border border-amber-300 text-amber-700 text-[0.55rem] font-bold py-1.5 px-3 rounded-lg hover:bg-amber-50 transition cursor-pointer"
+                            >
+                              Details
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleRequestJoin(trip.tripId); }}
+                              className="bg-amber-500 text-white text-[0.55rem] font-bold py-1.5 px-3 rounded-lg hover:bg-amber-600 transition cursor-pointer border-none"
+                            >
+                              Join
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}
                   </div>
                 </div>
+              )}
+
+              {sharedTrips.length === 0 && pickup && dropoff && (
+                <p className="text-[0.55rem] text-[#8B8B9E] text-center mt-4 m-0">
+                  No shared trips found along this route
+                </p>
               )}
 
               <div className="flex gap-2 mt-4">
@@ -555,6 +576,97 @@ function RequestRideInner() {
                {loading ? 'Requesting...' : (isShared ? 'Confirm Request' : (paymentMethod === 'wallet' && walletBalance !== null && passengerOffer && parseFloat(passengerOffer) > walletBalance) ? 'Insufficient Wallet' : 'Request Ride')}
              </button>
            </div>
+        </div>
+      )}
+
+      {detailTrip && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setDetailTrip(null)}>
+          <div className="bg-white rounded-2xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto shadow-xl border border-[#F0E0E8]" onClick={e => e.stopPropagation()}>
+            <div className="p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-bold text-[#1A1A1A] m-0">Trip Details</h3>
+                <button onClick={() => setDetailTrip(null)} className="bg-[#F5F5F5] w-8 h-8 rounded-full flex items-center justify-center hover:bg-[#E0E0E0] transition cursor-pointer border-none text-sm font-bold text-[#666]">
+                  ✕
+                </button>
+              </div>
+
+              <div className="h-48 rounded-xl overflow-hidden mb-4 border border-[#F0E0E8]">
+                <RideRouteMap
+                  key={detailTrip.tripId}
+                  pickup={{ lat: detailTrip.pickupLat, lng: detailTrip.pickupLng }}
+                  dropoff={{ lat: detailTrip.dropoffLat, lng: detailTrip.dropoffLng }}
+                  passengerMarkers={[
+                    { lat: pickup.lat, lng: pickup.lng, photoUrl: user?.profilePhoto ? `${import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:5000'}/${user.profilePhoto.replace(/\\/g, '/')}` : null, name: user?.name || 'You' },
+                    { lat: dropoff.lat, lng: dropoff.lng, photoUrl: null, name: 'Dropoff' },
+                  ]}
+                  height="100%"
+                />
+              </div>
+
+              <div className="flex items-center gap-3 mb-4 bg-[#FFF8FA] rounded-xl p-3.5 border border-[#F0E0E8]">
+                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-amber-100 to-amber-200 flex items-center justify-center text-xl font-bold text-amber-600 flex-shrink-0 border-2 border-amber-300 overflow-hidden">
+                  {detailTrip.driverPhoto ? (
+                    <img src={`${import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:5000'}/${detailTrip.driverPhoto.replace(/\\/g, '/')}`} alt="" className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.textContent = detailTrip.driverName?.[0] || 'D'; }} />
+                  ) : (
+                    detailTrip.driverName?.[0] || 'D'
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-[#1A1A1A] m-0">{detailTrip.driverName || 'Driver'}</p>
+                  {detailTrip.driverPhone && <p className="text-xs text-[#8B8B9E] m-0">{detailTrip.driverPhone}</p>}
+                  <p className="text-[0.55rem] text-amber-600 font-semibold m-0 mt-0.5 uppercase tracking-wider">Driver</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xl font-bold text-amber-700 font-mono m-0">{detailTrip.pricePerSeat} PKR</p>
+                  <p className="text-[0.55rem] text-[#8B8B9E] m-0">per seat</p>
+                </div>
+              </div>
+
+              <div className="space-y-2 mb-4">
+                <div className="flex items-center gap-3 text-xs">
+                  <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[0.6rem] text-[#8B8B9E] m-0 uppercase tracking-wider">Pickup</p>
+                    <p className="text-xs text-[#1A1A1A] m-0 truncate"><AddressLabel address={detailTrip.pickupAddress} lat={detailTrip.pickupLat} lng={detailTrip.pickupLng} /></p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 text-xs">
+                  <div className="w-6 h-6 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+                    <div className="w-2.5 h-2.5 rounded-full bg-red-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[0.6rem] text-[#8B8B9E] m-0 uppercase tracking-wider">Dropoff</p>
+                    <p className="text-xs text-[#1A1A1A] m-0 truncate"><AddressLabel address={detailTrip.dropoffAddress} lat={detailTrip.dropoffLat} lng={detailTrip.dropoffLng} /></p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs text-[#8B8B9E] mb-4">
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-50 text-amber-700 font-bold">
+                  {detailTrip.availableSeats} {detailTrip.availableSeats === 1 ? 'seat' : 'seats'} left
+                </span>
+                <span>{new Date(detailTrip.departureTime).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setDetailTrip(null)}
+                  className="flex-1 bg-white border border-[#F0E0E8] text-[#880E4F] font-semibold text-sm py-2.5 rounded-xl hover:border-[#E91E8C] hover:bg-[#FFF8FA] transition cursor-pointer"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => { setDetailTrip(null); handleRequestJoin(detailTrip.tripId); }}
+                  disabled={loading}
+                  className="flex-1 bg-amber-500 text-white font-bold text-sm py-2.5 rounded-xl hover:bg-amber-600 transition cursor-pointer border-none disabled:opacity-50"
+                >
+                  {loading ? 'Requesting...' : 'Request to Join'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

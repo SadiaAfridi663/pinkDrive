@@ -36,6 +36,7 @@ import WalletPage from './pages/WalletPage';
 import CreateSharedTrip from './pages/CreateSharedTrip';
 import SharedTripDetail from './pages/SharedTripDetail';
 import DriverProfile from './pages/DriverProfile';
+import DriverActiveSharedTrip from './pages/DriverActiveSharedTrip';
 
 function Home() {
   const { user } = useContext(AuthContext);
@@ -92,6 +93,7 @@ function App() {
             <Route path="/driver/create-trip" element={<Layout roles={['driver']} title="Create Shared Trip" subtitle="Offer seats along your route"><CreateSharedTrip /></Layout>} />
              <Route path="/driver/shared-trips" element={<Layout roles={['driver']} title="Shared Trips" subtitle="Manage your shared trips"><CreateSharedTrip /></Layout>} />
              <Route path="/driver/profile/:id" element={<Layout roles={['passenger', 'driver']} title="Driver Profile" subtitle="View driver details"><DriverProfile /></Layout>} />
+             <Route path="/driver/shared-trip/:tripId" element={<Layout roles={['driver']} title="Shared Trip" subtitle="Manage your shared trip"><DriverActiveSharedTrip /></Layout>} />
              <Route path="/shared-trip/:requestId" element={<Layout roles={['passenger']} title="Shared Trip" subtitle="Your shared trip details"><SharedTripDetail /></Layout>} />
             <Route path="/" element={<Layout title="Home"><Home /></Layout>} />
           </Routes>

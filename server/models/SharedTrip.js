@@ -60,8 +60,16 @@ const SharedTrip = sequelize.define('SharedTrip', {
     type: DataTypes.STRING,
     defaultValue: 'active',
     validate: {
-      isIn: [['active', 'full', 'cancelled', 'completed']],
+      isIn: [['active', 'full', 'in_progress', 'completed', 'cancelled']],
     },
+  },
+  startedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+  completedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
   },
 }, {
   timestamps: true,

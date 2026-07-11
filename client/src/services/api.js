@@ -139,9 +139,10 @@ export const sosAPI = {
 
 export const sharedTripAPI = {
   create: (data) => api.post('/shared-trips', data),
-  getAvailable: (lat, lng) => {
+  getAvailable: (lat, lng, dropoffLat, dropoffLng) => {
     const params = {};
     if (lat != null && lng != null) { params.lat = lat; params.lng = lng; }
+    if (dropoffLat != null && dropoffLng != null) { params.dropoffLat = dropoffLat; params.dropoffLng = dropoffLng; }
     return api.get('/shared-trips/available', { params });
   },
   getMyTrips: () => api.get('/shared-trips/my'),
@@ -151,6 +152,8 @@ export const sharedTripAPI = {
   acceptRequest: (requestId) => api.patch(`/shared-trips/requests/${requestId}/accept`),
   declineRequest: (requestId, reason) => api.patch(`/shared-trips/requests/${requestId}/decline`, { reason }),
   cancelTrip: (tripId) => api.patch(`/shared-trips/${tripId}/cancel`),
+  updateStatus: (tripId, status) => api.patch(`/shared-trips/${tripId}/status`, { status }),
+  getAcceptedPassengers: (tripId) => api.get(`/shared-trips/${tripId}/accepted-passengers`),
 };
 
 export const reviewAPI = {

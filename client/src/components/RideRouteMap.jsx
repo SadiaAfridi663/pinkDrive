@@ -64,7 +64,11 @@ const CAR_ICON = L.divIcon({
 const ROUTE_COLOR = '#e9408b';
 const ROUTE_WEIGHT = 5;
 
-function RideRouteMap({ pickup, dropoff, driverLocation, passengerLocation, nearbyDrivers, secondaryPickup, secondaryDropoff, secondaryColor, height, className }) {
+const API_URL = import.meta.env.VITE_API_URL
+  ? import.meta.env.VITE_API_URL.replace('/api', '')
+  : 'http://localhost:5000';
+
+function RideRouteMap({ pickup, dropoff, driverLocation, passengerLocation, nearbyDrivers, secondaryPickup, secondaryDropoff, secondaryColor, height, className, passengerMarkers }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const pickupMarkerRef = useRef(null);
@@ -76,6 +80,7 @@ function RideRouteMap({ pickup, dropoff, driverLocation, passengerLocation, near
   const secondaryPickupMarkerRef = useRef(null);
   const secondaryDropoffMarkerRef = useRef(null);
   const secondaryRouteLayerRef = useRef(null);
+  const passengerMarkersRef = useRef([]);
 
   const fetchRoute = async (map, p1, p2) => {
     if (routeLayerRef.current) {
@@ -87,6 +92,7 @@ function RideRouteMap({ pickup, dropoff, driverLocation, passengerLocation, near
       const res = await fetch(url);
       const data = await res.json();
       if (data.code !== 'Ok' || !data.routes?.[0]) return;
+      if (mapRef.current !== map) return;
       const coords = data.routes[0].geometry.coordinates.map((c) => [c[1], c[0]]);
       routeLayerRef.current = L.polyline(coords, {
         color: ROUTE_COLOR,
@@ -97,7 +103,9 @@ function RideRouteMap({ pickup, dropoff, driverLocation, passengerLocation, near
       }).addTo(map);
       fitAll();
     } catch (err) {
-      console.warn('[RideRouteMap] OSRM route failed:', err);
+      if (mapRef.current === map) {
+        console.warn('[RideRouteMap] OSRM route failed:', err);
+      }
     }
   };
 
@@ -111,6 +119,7 @@ function RideRouteMap({ pickup, dropoff, driverLocation, passengerLocation, near
       const res = await fetch(url);
       const data = await res.json();
       if (data.code !== 'Ok' || !data.routes?.[0]) return;
+      if (mapRef.current !== map) return;
       const coords = data.routes[0].geometry.coordinates.map((c) => [c[1], c[0]]);
       secondaryRouteLayerRef.current = L.polyline(coords, {
         color: secondaryColor || '#f59e0b',
@@ -122,7 +131,9 @@ function RideRouteMap({ pickup, dropoff, driverLocation, passengerLocation, near
       }).addTo(map);
       fitAll();
     } catch (err) {
-      console.warn('[RideRouteMap] Secondary OSRM route failed:', err);
+      if (mapRef.current === map) {
+        console.warn('[RideRouteMap] Secondary OSRM route failed:', err);
+      }
     }
   };
 
@@ -136,6 +147,11 @@ function RideRouteMap({ pickup, dropoff, driverLocation, passengerLocation, near
     if (secondaryDropoff) points.push([secondaryDropoff.lat, secondaryDropoff.lng]);
     if (driverLocation) points.push([driverLocation.lat, driverLocation.lng]);
     if (passengerLocation) points.push([passengerLocation.lat, passengerLocation.lng]);
+    if (passengerMarkers) {
+      for (const pm of passengerMarkers) {
+        points.push([pm.lat, pm.lng]);
+      }
+    }
     if (points.length < 2) {
       if (points.length === 1) {
         map.setView(points[0], 14);
@@ -178,6 +194,10 @@ function RideRouteMap({ pickup, dropoff, driverLocation, passengerLocation, near
       secondaryPickupMarkerRef.current = null;
       secondaryDropoffMarkerRef.current = null;
       secondaryRouteLayerRef.current = null;
+      passengerMarkersRef.current = [];
+      if (containerRef.current) {
+        delete containerRef.current._leaflet_id;
+      }
     };
   }, []);
 
@@ -305,6 +325,30 @@ function RideRouteMap({ pickup, dropoff, driverLocation, passengerLocation, near
       }
     }
   }, [nearbyDrivers]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    for (const m of passengerMarkersRef.current) map.removeLayer(m);
+    passengerMarkersRef.current = [];
+
+    if (passengerMarkers) {
+      for (const pm of passengerMarkers) {
+        const photoUrl = pm.photoUrl || (pm.passengerPhoto ? `${API_URL}/${pm.passengerPhoto.replace(/\\/g, '/')}` : null);
+        const initial = (pm.name || pm.passengerName || 'P')[0];
+        const html = photoUrl
+          ? `<div style="width:36px;height:36px;border-radius:50%;border:3px solid #e9408b;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,0.3);background:white;"><img src="${photoUrl}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.parentElement.textContent='${initial}'" /></div>`
+          : `<div style="width:36px;height:36px;border-radius:50%;border:3px solid #e9408b;display:flex;align-items:center;justify-content:center;background:#FCE4EC;color:#E91E8C;font-weight:bold;font-size:16px;box-shadow:0 2px 6px rgba(0,0,0,0.3);">${initial}</div>`;
+        const icon = L.divIcon({ html, className: '', iconSize: [36, 36], iconAnchor: [18, 18] });
+        const m = L.marker([pm.lat, pm.lng], { icon })
+          .addTo(map)
+          .bindPopup(pm.name || pm.passengerName || 'Passenger');
+        passengerMarkersRef.current.push(m);
+      }
+      fitAll();
+    }
+  }, [passengerMarkers]);
 
   return (
     <div

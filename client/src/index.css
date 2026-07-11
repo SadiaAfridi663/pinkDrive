@@ -224,6 +224,7 @@
     max-width: var(--container-page-wide);
     margin: 0 auto;
     padding: 2rem 1.5rem 4rem;
+    width: 100%;
   }
   .page-header {
     margin-bottom: 1.5rem;

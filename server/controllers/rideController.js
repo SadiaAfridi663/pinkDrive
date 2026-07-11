@@ -329,10 +329,10 @@ exports.acceptRide = catchAsync(async (req, res, next) => {
 
   const SharedTrip = require('../models/SharedTrip');
   const activeTrip = await SharedTrip.findOne({
-    where: { driverId: req.user.id, status: { [Op.in]: ['active'] } },
+    where: { driverId: req.user.id, status: { [Op.in]: ['active', 'full', 'in_progress'] } },
   });
   if (activeTrip) {
-    return next(new AppError('You have an active shared trip. Complete or cancel it first.', 400));
+    return next(new AppError('You have an active shared trip. Cancel it first to accept private rides.', 400));
   }
 
   const onlineDrivers = getOnlineDrivers();
