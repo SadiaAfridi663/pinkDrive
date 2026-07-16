@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { AuthContext } from './AuthContext';
 import { useSocket } from './SocketContext';
+import { SERVER_EVENTS, CLIENT_EVENTS } from '../constants/socketEvents';
 import { notificationAPI } from '../services/api';
 import logger from '../utils/logger';
 
@@ -71,11 +72,17 @@ function NotificationProvider({ children }) {
       }, ...prev]);
     };
 
-    socket.on('notification:new', handleNewNotification);
-    socket.emit('join:user');
+    const handleReconnect = () => {
+      socket.emit(CLIENT_EVENTS.JOIN_USER);
+    };
+
+    socket.on(SERVER_EVENTS.NOTIFICATION_NEW, handleNewNotification);
+    socket.on('connect', handleReconnect);
+    socket.emit(CLIENT_EVENTS.JOIN_USER);
 
     return () => {
-      socket.off('notification:new', handleNewNotification);
+      socket.off(SERVER_EVENTS.NOTIFICATION_NEW, handleNewNotification);
+      socket.off('connect', handleReconnect);
     };
   }, [socket, user]);
 

@@ -5,6 +5,7 @@ const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/AppError');
 const logger = require('../utils/logger');
 const { getIO } = require('../sockets');
+const { SERVER_EVENTS, ROOMS } = require('../sockets/events');
 const { sendRideReceiptToPassenger, sendDriverRideCompleted } = require('../services/receiptService');
 
 async function confirmRidePayment(rideId, stripeSessionId) {
@@ -66,7 +67,7 @@ async function confirmRidePayment(rideId, stripeSessionId) {
 
   const io = getIO();
   if (io) {
-    io.to(`ride:${rideId}`).emit('ride:status', { rideId, status: ride.status });
+    io.to(ROOMS.RIDE(rideId)).emit(SERVER_EVENTS.RIDE_STATUS, { rideId, status: ride.status });
   }
 
   sendRideReceiptToPassenger(rideId);

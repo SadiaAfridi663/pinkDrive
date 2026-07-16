@@ -1,8 +1,9 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { sharedTripAPI, sosAPI } from '../services/api';
 import { AuthContext } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
+import { SERVER_EVENTS, CLIENT_EVENTS } from '../constants/socketEvents';
 import RideRouteMap from '../components/RideRouteMap';
 import AddressLabel from '../components/AddressLabel';
 
@@ -19,11 +20,23 @@ function SharedTripDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [sosSending, setSosSending] = useState(false);
+  const [driverLocation, setDriverLocation] = useState(null);
+  const [driverLastSeen, setDriverLastSeen] = useState(null);
+
+  const fetchRequest = useCallback(async () => {
+    try {
+      const res = await sharedTripAPI.getMyRequests();
+      const found = res.data.data.requests.find(r => r.id === requestId);
+      if (found) setRequest(found);
+    } catch {
+      // silently fail
+    }
+  }, [requestId]);
 
   useEffect(() => {
     if (!requestId) return;
     let cancelled = false;
-    const fetch = async () => {
+    (async () => {
       try {
         const res = await sharedTripAPI.getMyRequests();
         const found = res.data.data.requests.find(r => r.id === requestId);
@@ -36,28 +49,107 @@ function SharedTripDetail() {
       } finally {
         if (!cancelled) setLoading(false);
       }
-    };
-    fetch();
+    })();
     return () => { cancelled = true; };
   }, [requestId]);
 
+  // Join trip room when request is accepted/in_progress for real-time updates
   useEffect(() => {
     if (!socket || !request) return;
-    const handler = () => {
-      sharedTripAPI.getMyRequests().then(res => {
-        const updated = res.data.data.requests.find(r => r.id === requestId);
-        if (updated) setRequest(updated);
-      });
+    const isActive = ['accepted', 'in_progress', 'passenger_boarded', 'driver_arriving'].includes(request.status);
+
+    const joinRoom = () => {
+      if (isActive && request.tripId) {
+        socket.emit(CLIENT_EVENTS.JOIN_TRIP, request.tripId);
+      }
     };
-    socket.on('trip:request:accepted', handler);
-    socket.on('trip:request:declined', handler);
-    socket.on('trip:cancelled', handler);
+
+    joinRoom();
+
+    // Listen for request status changes (accepted/declined/cancelled)
+    const requestHandler = () => fetchRequest();
+    socket.on(SERVER_EVENTS.TRIP_REQUEST_ACCEPTED, requestHandler);
+    socket.on(SERVER_EVENTS.TRIP_REQUEST_DECLINED, requestHandler);
+    socket.on(SERVER_EVENTS.TRIP_CANCELLED, requestHandler);
+
+    // Listen for trip status changes (in_progress/completed)
+    const tripHandler = (data) => {
+      if (data.tripId === request.tripId) {
+        setRequest(prev => prev ? {
+          ...prev,
+          trip: { ...prev.trip, status: data.status, startedAt: data.startedAt, completedAt: data.completedAt },
+        } : prev);
+      }
+    };
+    socket.on(SERVER_EVENTS.TRIP_STATUS, tripHandler);
+
+    // Listen for lifecycle and passenger sync events
+    const lifecycleHandler = (data) => {
+      if (data.tripId === request.tripId) {
+        fetchRequest();
+      }
+    };
+    socket.on(SERVER_EVENTS.DRIVER_ARRIVING, lifecycleHandler);
+    socket.on(SERVER_EVENTS.PASSENGER_BOARDED, lifecycleHandler);
+    socket.on(SERVER_EVENTS.PASSENGER_DROPPED, lifecycleHandler);
+    socket.on(SERVER_EVENTS.PASSENGER_JOINED, lifecycleHandler);
+    socket.on(SERVER_EVENTS.PASSENGER_LEFT, lifecycleHandler);
+    socket.on(SERVER_EVENTS.PASSENGER_REMOVED, lifecycleHandler);
+
+    // Listen for live driver location
+    const locationHandler = (data) => {
+      if (data.tripId === request.tripId) {
+        setDriverLocation({ lat: data.lat, lng: data.lng });
+        setDriverLastSeen(Date.now());
+      }
+    };
+    socket.on(SERVER_EVENTS.DRIVER_LOCATION, locationHandler);
+
+    // Reconnect: re-join trip room and re-fetch state
+    const onReconnect = () => {
+      joinRoom();
+      fetchRequest();
+    };
+    socket.on('connect', onReconnect);
+
     return () => {
-      socket.off('trip:request:accepted', handler);
-      socket.off('trip:request:declined', handler);
-      socket.off('trip:cancelled', handler);
+      if (isActive && request.tripId) {
+        socket.emit(CLIENT_EVENTS.LEAVE_TRIP, request.tripId);
+      }
+      socket.off(SERVER_EVENTS.TRIP_REQUEST_ACCEPTED, requestHandler);
+      socket.off(SERVER_EVENTS.TRIP_REQUEST_DECLINED, requestHandler);
+      socket.off(SERVER_EVENTS.TRIP_CANCELLED, requestHandler);
+      socket.off(SERVER_EVENTS.TRIP_STATUS, tripHandler);
+      socket.off(SERVER_EVENTS.DRIVER_ARRIVING, lifecycleHandler);
+      socket.off(SERVER_EVENTS.PASSENGER_BOARDED, lifecycleHandler);
+      socket.off(SERVER_EVENTS.PASSENGER_DROPPED, lifecycleHandler);
+      socket.off(SERVER_EVENTS.PASSENGER_JOINED, lifecycleHandler);
+      socket.off(SERVER_EVENTS.PASSENGER_LEFT, lifecycleHandler);
+      socket.off(SERVER_EVENTS.PASSENGER_REMOVED, lifecycleHandler);
+      socket.off(SERVER_EVENTS.DRIVER_LOCATION, locationHandler);
+      socket.off('connect', onReconnect);
     };
-  }, [socket, request?.id]);
+  }, [socket, request?.id, request?.tripId, request?.status]);
+
+  // Watch passenger location and broadcast to shared trip room
+  useEffect(() => {
+    const shouldTrack = request && ['accepted', 'driver_arriving'].includes(request.status);
+    if (!shouldTrack || !socket?.connected || !navigator.geolocation) return;
+
+    const intervalRef = setInterval(() => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          socket.emit(CLIENT_EVENTS.LOCATION_UPDATE, {
+            lat: pos.coords.latitude, lng: pos.coords.longitude,
+          });
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 10000 },
+      );
+    }, 8000);
+
+    return () => clearInterval(intervalRef);
+  }, [socket?.connected, request?.status]);
 
   const handleSOS = async () => {
     if (!request || sosSending) return;
@@ -90,6 +182,11 @@ function SharedTripDetail() {
     const map = {
       pending: 'bg-amber-50 text-amber-700 border-amber-200',
       accepted: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      driver_arriving: 'bg-blue-50 text-blue-700 border-blue-200',
+      passenger_boarded: 'bg-violet-50 text-violet-700 border-violet-200',
+      in_progress: 'bg-blue-50 text-blue-700 border-blue-200',
+      dropped_off: 'bg-gray-50 text-gray-500 border-gray-200',
+      completed: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       declined: 'bg-red-50 text-red-600 border-red-200',
       cancelled: 'bg-gray-50 text-gray-500 border-gray-200',
     };
@@ -118,7 +215,7 @@ function SharedTripDetail() {
   if (!request) return null;
 
   const trip = request.trip || {};
-  const isAccepted = request.status === 'accepted';
+  const isActiveRide = ['accepted', 'in_progress', 'passenger_boarded', 'driver_arriving'].includes(request.status);
 
   const tripPickup = trip.pickupLat != null ? { lat: trip.pickupLat, lng: trip.pickupLng } : null;
   const tripDropoff = trip.dropoffLat != null ? { lat: trip.dropoffLat, lng: trip.dropoffLng } : null;
@@ -229,10 +326,25 @@ function SharedTripDetail() {
           <p className="text-xs font-bold text-[#8B8B9E] uppercase tracking-wider m-0 mb-2">
             Route Map
           </p>
+          {isActiveRide && (
+            <div className="mb-3 text-xs">
+              {driverLocation ? (
+                <span className={`inline-flex items-center gap-1.5 ${driverLastSeen && Date.now() - driverLastSeen > 30000 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                  <span className={`w-2 h-2 rounded-full ${driverLastSeen && Date.now() - driverLastSeen > 30000 ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500 animate-pulse'}`} />
+                  {driverLastSeen && Date.now() - driverLastSeen > 30000
+                    ? `Driver location stale — last seen ${Math.round((Date.now() - driverLastSeen) / 1000)}s ago`
+                    : 'Driver location live'}
+                </span>
+              ) : (
+                <span className="text-[#8B8B9E]">Waiting for driver location...</span>
+              )}
+            </div>
+          )}
         </div>
         <RideRouteMap
           pickup={tripPickup}
           dropoff={tripDropoff}
+          driverLocation={driverLocation}
           secondaryPickup={passengerPickup}
           secondaryDropoff={passengerDropoff}
           height="260px"
@@ -246,11 +358,17 @@ function SharedTripDetail() {
             <span className="w-3 h-0.5 rounded-full bg-[#f59e0b]" style={{ borderTop: '2px dashed #f59e0b', height: 0, borderTopWidth: 2 }} />
             <span>Your route</span>
           </div>
+          {driverLocation && (
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full bg-blue-500 border-2 border-white shadow-sm" />
+              <span>Driver</span>
+            </div>
+          )}
         </div>
       </div>
 
       <div className="flex gap-3">
-        {isAccepted && (
+        {isActiveRide && (
           <button
             onClick={handleSOS}
             disabled={sosSending}
@@ -259,12 +377,14 @@ function SharedTripDetail() {
             {sosSending ? 'Sending...' : 'SOS Emergency'}
           </button>
         )}
-        <button
-          onClick={handleCancel}
-          className="flex-1 bg-white border-2 border-[#F0E0E8] text-[#8B8B9E] font-semibold text-sm py-3 rounded-xl hover:border-red-200 hover:text-red-500 transition cursor-pointer"
-        >
-          Cancel Request
-        </button>
+        {request.status === 'pending' && (
+          <button
+            onClick={handleCancel}
+            className="flex-1 bg-white border-2 border-[#F0E0E8] text-[#8B8B9E] font-semibold text-sm py-3 rounded-xl hover:border-red-200 hover:text-red-500 transition cursor-pointer"
+          >
+            Cancel Request
+          </button>
+        )}
       </div>
     </div>
   );

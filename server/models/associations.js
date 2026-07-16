@@ -60,6 +60,10 @@ function setupAssociations() {
   Transaction.belongsTo(User, { foreignKey: 'userId', as: 'user' });
   User.hasMany(Transaction, { foreignKey: 'userId' });
 
+  // Transaction <-> TripRequest
+  Transaction.belongsTo(TripRequest, { foreignKey: 'tripRequestId', as: 'tripRequest' });
+  TripRequest.hasMany(Transaction, { foreignKey: 'tripRequestId' });
+
   // WithdrawalRequest <-> User
   WithdrawalRequest.belongsTo(User, { foreignKey: 'userId', as: 'user' });
   User.hasMany(WithdrawalRequest, { foreignKey: 'userId' });

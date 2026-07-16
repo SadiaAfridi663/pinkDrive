@@ -5,6 +5,7 @@ import AddressLabel from '../components/AddressLabel';
 import { rideAPI, sosAPI, paymentsAPI } from '../services/api';
 import { AuthContext } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
+import { SERVER_EVENTS, CLIENT_EVENTS } from '../constants/socketEvents';
 import RideRouteMap from '../components/RideRouteMap';
 import useGeolocation from '../hooks/useGeolocation';
 import { ToastContext } from '../context/ToastContext';
@@ -46,17 +47,17 @@ function ActiveRide() {
 
   useEffect(() => {
     if (!socket || !ride) return;
-    socket.emit('join:ride', ride.id);
+    socket.emit(CLIENT_EVENTS.JOIN_RIDE, ride.id);
     const locHandler = (loc) => setDriverLocation(loc);
     const statusHandler = () => fetchRide();
     const connectHandler = () => fetchRide();
-    socket.on('driver:location', locHandler);
-    socket.on('ride:status', statusHandler);
+    socket.on(SERVER_EVENTS.DRIVER_LOCATION, locHandler);
+    socket.on(SERVER_EVENTS.RIDE_STATUS, statusHandler);
     socket.on('connect', connectHandler);
     return () => {
-      socket.emit('leave:ride', ride.id);
-      socket.off('driver:location', locHandler);
-      socket.off('ride:status', statusHandler);
+      socket.emit(CLIENT_EVENTS.LEAVE_RIDE, ride.id);
+      socket.off(SERVER_EVENTS.DRIVER_LOCATION, locHandler);
+      socket.off(SERVER_EVENTS.RIDE_STATUS, statusHandler);
       socket.off('connect', connectHandler);
     };
   }, [socket, ride?.id]);
@@ -67,7 +68,7 @@ function ActiveRide() {
     if (watchStartedRef.current) return;
     watchStartedRef.current = true;
     request();
-    startWatching((loc) => { if (socket?.connected) socket.emit('location:update', { rideId: ride.id, lat: loc.lat, lng: loc.lng }); });
+    startWatching((loc) => { if (socket?.connected) socket.emit(CLIENT_EVENTS.LOCATION_UPDATE, { rideId: ride.id, lat: loc.lat, lng: loc.lng }); });
     return () => { watchStartedRef.current = false; };
   }, [ride?.id, ride?.status, user?.role, socket?.connected]);
 

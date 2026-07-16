@@ -153,6 +153,9 @@ export const sharedTripAPI = {
   declineRequest: (requestId, reason) => api.patch(`/shared-trips/requests/${requestId}/decline`, { reason }),
   cancelTrip: (tripId) => api.patch(`/shared-trips/${tripId}/cancel`),
   updateStatus: (tripId, status) => api.patch(`/shared-trips/${tripId}/status`, { status }),
+  driverArriving: (tripId) => api.patch(`/shared-trips/${tripId}/driver-arriving`),
+  boardPassenger: (tripId, requestId) => api.patch(`/shared-trips/${tripId}/passenger-board/${requestId}`),
+  dropoffPassenger: (tripId, requestId) => api.patch(`/shared-trips/${tripId}/passenger-drop/${requestId}`),
   getAcceptedPassengers: (tripId) => api.get(`/shared-trips/${tripId}/accepted-passengers`),
 };
 

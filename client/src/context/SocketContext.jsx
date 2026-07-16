@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import { AuthContext } from './AuthContext';
+import { SERVER_EVENTS, CLIENT_EVENTS } from '../constants/socketEvents';
 import logger from '../utils/logger';
 
 const SOCKET_URL = import.meta.env.VITE_API_URL

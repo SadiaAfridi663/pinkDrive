@@ -5,6 +5,7 @@ import RideRouteMap from '../components/RideRouteMap';
 import { rideAPI, walletAPI, sosAPI, sharedTripAPI } from '../services/api';
 import { AuthContext } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
+import { SERVER_EVENTS, CLIENT_EVENTS } from '../constants/socketEvents';
 import useGeolocation from '../hooks/useGeolocation';
 import DashboardLayout from '../components/DashboardLayout';
 
@@ -38,8 +39,8 @@ function DashboardView() {
         setHistory(historyRes.data.data.rides.slice(0, 5));
         setWalletBalance(walletRes.data.data.wallet.balance);
         const reqs = sharedRes.data.data.requests || [];
-        const accepted = reqs.find(r => r.status === 'accepted');
-        setActiveSharedRequest(accepted || null);
+        const activeShared = reqs.find(r => ['accepted', 'in_progress', 'passenger_boarded', 'driver_arriving'].includes(r.status));
+        setActiveSharedRequest(activeShared || null);
       }
     } catch {
       // no active ride
@@ -57,22 +58,30 @@ function DashboardView() {
 
   useEffect(() => {
     if (!socket || !activeRide) return;
-    socket.emit('join:ride', activeRide.id);
+    socket.emit(CLIENT_EVENTS.JOIN_RIDE, activeRide.id);
     const handler = () => fetch(true);
-    socket.on('ride:status', handler);
-    return () => { socket.emit('leave:ride', activeRide.id); socket.off('ride:status', handler); };
+    socket.on(SERVER_EVENTS.RIDE_STATUS, handler);
+    return () => { socket.emit(CLIENT_EVENTS.LEAVE_RIDE, activeRide.id); socket.off(SERVER_EVENTS.RIDE_STATUS, handler); };
   }, [socket, activeRide?.id]);
 
   useEffect(() => {
     if (!socket) return;
     const sharedHandler = () => fetch(true);
-    socket.on('trip:request:accepted', sharedHandler);
-    socket.on('trip:request:declined', sharedHandler);
-    socket.on('trip:cancelled', sharedHandler);
+    socket.on(SERVER_EVENTS.TRIP_REQUEST_ACCEPTED, sharedHandler);
+    socket.on(SERVER_EVENTS.TRIP_REQUEST_DECLINED, sharedHandler);
+    socket.on(SERVER_EVENTS.TRIP_CANCELLED, sharedHandler);
+    socket.on(SERVER_EVENTS.TRIP_STATUS, sharedHandler);
+    socket.on(SERVER_EVENTS.PASSENGER_JOINED, sharedHandler);
+    socket.on(SERVER_EVENTS.PASSENGER_LEFT, sharedHandler);
+    socket.on(SERVER_EVENTS.PASSENGER_REMOVED, sharedHandler);
     return () => {
-      socket.off('trip:request:accepted', sharedHandler);
-      socket.off('trip:request:declined', sharedHandler);
-      socket.off('trip:cancelled', sharedHandler);
+      socket.off(SERVER_EVENTS.TRIP_REQUEST_ACCEPTED, sharedHandler);
+      socket.off(SERVER_EVENTS.TRIP_REQUEST_DECLINED, sharedHandler);
+      socket.off(SERVER_EVENTS.TRIP_CANCELLED, sharedHandler);
+      socket.off(SERVER_EVENTS.TRIP_STATUS, sharedHandler);
+      socket.off(SERVER_EVENTS.PASSENGER_JOINED, sharedHandler);
+      socket.off(SERVER_EVENTS.PASSENGER_LEFT, sharedHandler);
+      socket.off(SERVER_EVENTS.PASSENGER_REMOVED, sharedHandler);
     };
   }, [socket]);
 
@@ -396,13 +405,19 @@ function PassengerHub() {
               .then(res => setRequests(res.data.data.requests || []))
               .catch(() => { });
           };
-          socket.on('trip:request:accepted', refresh);
-          socket.on('trip:request:declined', refresh);
-          socket.on('trip:cancelled', refresh);
+          socket.on(SERVER_EVENTS.TRIP_REQUEST_ACCEPTED, refresh);
+          socket.on(SERVER_EVENTS.TRIP_REQUEST_DECLINED, refresh);
+          socket.on(SERVER_EVENTS.TRIP_CANCELLED, refresh);
+          socket.on(SERVER_EVENTS.PASSENGER_JOINED, refresh);
+          socket.on(SERVER_EVENTS.PASSENGER_LEFT, refresh);
+          socket.on(SERVER_EVENTS.PASSENGER_REMOVED, refresh);
           return () => {
-            socket.off('trip:request:accepted', refresh);
-            socket.off('trip:request:declined', refresh);
-            socket.off('trip:cancelled', refresh);
+            socket.off(SERVER_EVENTS.TRIP_REQUEST_ACCEPTED, refresh);
+            socket.off(SERVER_EVENTS.TRIP_REQUEST_DECLINED, refresh);
+            socket.off(SERVER_EVENTS.TRIP_CANCELLED, refresh);
+            socket.off(SERVER_EVENTS.PASSENGER_JOINED, refresh);
+            socket.off(SERVER_EVENTS.PASSENGER_LEFT, refresh);
+            socket.off(SERVER_EVENTS.PASSENGER_REMOVED, refresh);
           };
         }, [socket]);
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { CheckCircle } from 'lucide-react';
 import { sosAPI } from '../services/api';
 import { useSocket } from '../context/SocketContext';
+import { SERVER_EVENTS } from '../constants/socketEvents';
 
 function AdminSOS() {
   const [alerts, setAlerts] = useState([]);
@@ -31,11 +32,11 @@ function AdminSOS() {
     if (!socket) return;
     const onAlert = () => { fetchAlerts(); };
     const onResolved = () => { fetchAlerts(); };
-    socket.on('sos:alert', onAlert);
-    socket.on('sos:resolved', onResolved);
+    socket.on(SERVER_EVENTS.SOS_ALERT, onAlert);
+    socket.on(SERVER_EVENTS.SOS_RESOLVED, onResolved);
     return () => {
-      socket.off('sos:alert', onAlert);
-      socket.off('sos:resolved', onResolved);
+      socket.off(SERVER_EVENTS.SOS_ALERT, onAlert);
+      socket.off(SERVER_EVENTS.SOS_RESOLVED, onResolved);
     };
   }, [socket, fetchAlerts]);
 

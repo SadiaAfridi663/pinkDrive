@@ -45,11 +45,35 @@ const TripRequest = sequelize.define('TripRequest', {
     type: DataTypes.STRING,
     defaultValue: 'pending',
     validate: {
-      isIn: [['pending', 'accepted', 'declined', 'cancelled']],
+      isIn: [['pending', 'accepted', 'driver_arriving', 'passenger_boarded', 'in_progress', 'dropped_off', 'completed', 'declined', 'cancelled']],
     },
   },
   declineReason: {
     type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  boardingTime: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+  dropoffTime: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+  isPaid: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+  },
+  paymentStatus: {
+    type: DataTypes.STRING,
+    defaultValue: 'pending',
+  },
+  stripePaymentIntentId: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  stripeSessionId: {
+    type: DataTypes.STRING,
     allowNull: true,
   },
 }, {

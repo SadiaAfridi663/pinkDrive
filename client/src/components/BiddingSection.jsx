@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
+import { SERVER_EVENTS, CLIENT_EVENTS } from '../constants/socketEvents';
 import { rideAPI } from '../services/api';
 import logger from '../utils/logger';
 
@@ -41,7 +42,7 @@ function BiddingSection({ rideId, onAccepted }) {
 
   useEffect(() => {
     if (!socket || !rideId) return;
-    const joinRoom = () => { socket.emit('join:ride', rideId); };
+    const joinRoom = () => { socket.emit(CLIENT_EVENTS.JOIN_RIDE, rideId); };
     joinRoom();
 
     socket.on('connect', joinRoom);
@@ -66,16 +67,16 @@ function BiddingSection({ rideId, onAccepted }) {
       else navigate('/ride/active');
     };
 
-    socket.on('new:offer', handleNewOffer);
-    socket.on('offer:expired', handleOfferExpired);
-    socket.on('offer:accepted', handleOfferAccepted);
+    socket.on(SERVER_EVENTS.NEW_OFFER, handleNewOffer);
+    socket.on(SERVER_EVENTS.OFFER_EXPIRED, handleOfferExpired);
+    socket.on(SERVER_EVENTS.OFFER_ACCEPTED, handleOfferAccepted);
 
     return () => {
-      socket.emit('leave:ride', rideId);
+      socket.emit(CLIENT_EVENTS.LEAVE_RIDE, rideId);
       socket.off('connect', joinRoom);
-      socket.off('new:offer', handleNewOffer);
-      socket.off('offer:expired', handleOfferExpired);
-      socket.off('offer:accepted', handleOfferAccepted);
+      socket.off(SERVER_EVENTS.NEW_OFFER, handleNewOffer);
+      socket.off(SERVER_EVENTS.OFFER_EXPIRED, handleOfferExpired);
+      socket.off(SERVER_EVENTS.OFFER_ACCEPTED, handleOfferAccepted);
     };
   }, [socket, rideId]);
 

@@ -7,6 +7,7 @@ const AppError = require('../utils/AppError');
 const catchAsync = require('../utils/catchAsync');
 const logger = require('../utils/logger');
 const { getIO } = require('../sockets');
+const { SERVER_EVENTS, ROOMS } = require('../sockets/events');
 const Notification = require('../models/Notification');
 
 exports.createReview = catchAsync(async (req, res, next) => {
@@ -71,7 +72,7 @@ exports.createReview = catchAsync(async (req, res, next) => {
 
   const io = getIO();
   if (io) {
-    io.to(`user:${reviewedId}`).emit('notification:new', {
+    io.to(ROOMS.USER(reviewedId)).emit(SERVER_EVENTS.NOTIFICATION_NEW, {
       type: 'new_review',
       title: 'New Review',
       message: `${req.user.name} gave you ${rating} stars.`,

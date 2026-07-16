@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import AddressLabel from '../components/AddressLabel';
 import { rideAPI } from '../services/api';
 import { useSocket } from '../context/SocketContext';
+import { SERVER_EVENTS, CLIENT_EVENTS } from '../constants/socketEvents';
 import RideRouteMap from '../components/RideRouteMap';
 import LocationGate from '../components/LocationGate';
 
@@ -85,7 +86,7 @@ function DriverRidesInner() {
       (pos) => {
         const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setDriverLocation(loc);
-        socket.emit('location:update', { rideId: null, lat: loc.lat, lng: loc.lng });
+        socket.emit(CLIENT_EVENTS.LOCATION_UPDATE, { rideId: null, lat: loc.lat, lng: loc.lng });
       },
       () => {},
       { enableHighAccuracy: true, timeout: 10000 },
@@ -105,11 +106,11 @@ function DriverRidesInner() {
     const onReconnect = () => {
       socket.emit('driver:ready');
     };
-    socket.on('ride:available', handler);
+    socket.on(SERVER_EVENTS.RIDE_AVAILABLE, handler);
     socket.on('connect', onReconnect);
-    socket.emit('driver:ready');
+    socket.emit(CLIENT_EVENTS.DRIVER_READY);
     return () => {
-      socket.off('ride:available', handler);
+      socket.off(SERVER_EVENTS.RIDE_AVAILABLE, handler);
       socket.off('connect', onReconnect);
     };
   }, [socket]);
@@ -125,9 +126,9 @@ function DriverRidesInner() {
 
   useEffect(() => {
     if (!socket || !activeRide) return;
-    socket.emit('join:ride', activeRide.id);
+    socket.emit(CLIENT_EVENTS.JOIN_RIDE, activeRide.id);
     return () => {
-      socket.emit('leave:ride', activeRide.id);
+      socket.emit(CLIENT_EVENTS.LEAVE_RIDE, activeRide.id);
     };
   }, [socket, activeRide?.id]);
 
@@ -139,19 +140,19 @@ function DriverRidesInner() {
         fetchData();
       }
     };
-    socket.on('driver:location', handler);
-    socket.on('ride:status', statusHandler);
+    socket.on(SERVER_EVENTS.DRIVER_LOCATION, handler);
+    socket.on(SERVER_EVENTS.RIDE_STATUS, statusHandler);
     return () => {
-      socket.off('driver:location', handler);
-      socket.off('ride:status', statusHandler);
+      socket.off(SERVER_EVENTS.DRIVER_LOCATION, handler);
+      socket.off(SERVER_EVENTS.RIDE_STATUS, statusHandler);
     };
   }, [socket, activeRide?.id]);
 
   useEffect(() => {
     if (!socket) return;
     const handler = (loc) => setPassengerLocation(loc);
-    socket.on('passenger:location', handler);
-    return () => socket.off('passenger:location', handler);
+    socket.on(SERVER_EVENTS.PASSENGER_LOCATION, handler);
+    return () => socket.off(SERVER_EVENTS.PASSENGER_LOCATION, handler);
   }, [socket]);
 
   useEffect(() => {
@@ -174,7 +175,7 @@ function DriverRidesInner() {
           const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           setDriverLocation(loc);
           if (socket?.connected && activeRide) {
-            socket.emit('location:update', { rideId: activeRide.id, lat: loc.lat, lng: loc.lng });
+            socket.emit(CLIENT_EVENTS.LOCATION_UPDATE, { rideId: activeRide.id, lat: loc.lat, lng: loc.lng });
           }
           rideAPI.updateDriverLocation(activeRide.id, loc.lat, loc.lng).catch(() => {});
         },
@@ -220,7 +221,7 @@ function DriverRidesInner() {
           (pos) => {
             const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
             setDriverLocation(loc);
-            socket.emit('location:update', { rideId, lat: loc.lat, lng: loc.lng });
+            socket.emit(CLIENT_EVENTS.LOCATION_UPDATE, { rideId, lat: loc.lat, lng: loc.lng });
             rideAPI.updateDriverLocation(rideId, loc.lat, loc.lng).catch(() => {});
           },
           () => {},
@@ -238,7 +239,7 @@ function DriverRidesInner() {
     if (!amount || amount <= 0) { setError('Enter a valid bid amount.'); return; }
     setSubmittingBid(rideId);
     setError('');
-    socket.emit('driver:offer', { rideId, amount });
+    socket.emit(CLIENT_EVENTS.DRIVER_OFFER, { rideId, amount });
     setAvailableRides((prev) => prev.filter((r) => r.rideId !== rideId));
     setTimeout(() => setSubmittingBid(null), 1000);
   };
@@ -246,9 +247,9 @@ function DriverRidesInner() {
   useEffect(() => {
     if (!socket) return;
     const errHandler = (data) => setError(data.message || 'Bid failed.');
-    socket.on('offer:error', errHandler);
+    socket.on(SERVER_EVENTS.OFFER_ERROR, errHandler);
     return () => {
-      socket.off('offer:error', errHandler);
+      socket.off(SERVER_EVENTS.OFFER_ERROR, errHandler);
     };
   }, [socket]);
 

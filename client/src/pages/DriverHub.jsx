@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { driverAPI, walletAPI, sharedTripAPI } from '../services/api';
 import DashboardLayout from '../components/DashboardLayout';
+import { useSocket } from '../context/SocketContext';
+import { CLIENT_EVENTS } from '../constants/socketEvents';
 import DriverRides from './DriverRides';
 import DriverEarnings from './DriverEarnings';
 import DriverWithdraw from './DriverWithdraw';
@@ -243,6 +245,7 @@ function TripRequestsView() {
   const [declineModal, setDeclineModal] = useState(null);
   const [profileModal, setProfileModal] = useState(null);
   const [error, setError] = useState('');
+  const { socket } = useSocket();
 
   const fetchTrips = useCallback(async () => {
     try {
@@ -268,6 +271,17 @@ function TripRequestsView() {
   }, []);
 
   useEffect(() => { fetchTrips(); }, [fetchTrips]);
+
+  // Reconnect: re-fetch trips and re-emit trip:listen for real-time request notifications
+  useEffect(() => {
+    if (!socket) return;
+    const onReconnect = () => {
+      socket.emit(CLIENT_EVENTS.TRIP_LISTEN);
+      fetchTrips();
+    };
+    socket.on('connect', onReconnect);
+    return () => { socket.off('connect', onReconnect); };
+  }, [socket]);
 
   const handleAccept = async (requestId) => {
     setActionLoading(requestId);

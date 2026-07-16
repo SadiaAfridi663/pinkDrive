@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const { fileToUrl } = require('../utils/geo');
 const { getIO } = require('../sockets');
+const { SERVER_EVENTS, ROOMS } = require('../sockets/events');
 
 exports.uploadDocuments = catchAsync(async (req, res, next) => {
   const driver = await User.findByPk(req.user.id);
@@ -58,7 +59,7 @@ exports.uploadDocuments = catchAsync(async (req, res, next) => {
       // Emit to all admins in the admin-room
       (async () => {
         const io = getIO();
-        if (io) io.to('admin-room').emit('notification:new', {
+        if (io) io.to(ROOMS.ADMIN).emit(SERVER_EVENTS.NOTIFICATION_NEW, {
           ...notificationData,
           id: `notif-${Date.now()}`, // temporary ID for frontend
           createdAt: new Date().toISOString(),

@@ -15,6 +15,7 @@ const { reverseGeocodeBoth, haversineDistance, fileToUrl, isPointInPolygon, hydr
 const ServiceArea = require('../models/ServiceArea');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { getOnlineDrivers, getIO } = require('../sockets');
+const { SERVER_EVENTS, ROOMS } = require('../sockets/events');
 const {
   sendRideReceiptToPassenger,
   sendPaymentConfirmation,
@@ -128,7 +129,7 @@ exports.createRide = catchAsync(async (req, res, next) => {
     for (const driver of nearbyDrivers) {
       const socketId = onlineDrivers[driver.id]?.socketId;
       if (socketId) {
-        io.to(socketId).emit('ride:available', {
+        io.to(socketId).emit(SERVER_EVENTS.RIDE_AVAILABLE, {
           rideId: ride.id,
           pickupLat,
           pickupLng,
@@ -349,9 +350,9 @@ exports.acceptRide = catchAsync(async (req, res, next) => {
 
   const io = getIO();
   if (io) {
-    io.to(`ride:${ride.id}`).emit('ride:status', { rideId: ride.id, status: 'accepted' });
+    io.to(ROOMS.RIDE(ride.id)).emit(SERVER_EVENTS.RIDE_STATUS, { rideId: ride.id, status: 'accepted' });
     if (ride.driverLat != null && ride.driverLng != null) {
-      io.to(`ride:${ride.id}`).emit('driver:location', { lat: ride.driverLat, lng: ride.driverLng });
+      io.to(ROOMS.RIDE(ride.id)).emit(SERVER_EVENTS.DRIVER_LOCATION, { lat: ride.driverLat, lng: ride.driverLng });
     }
   }
 
@@ -364,7 +365,7 @@ exports.acceptRide = catchAsync(async (req, res, next) => {
       data: { rideId: ride.id, status: 'accepted' },
     });
     if (io) {
-      io.to(`user:${ride.passengerId}`).emit('notification:new', {
+      io.to(ROOMS.USER(ride.passengerId)).emit(SERVER_EVENTS.NOTIFICATION_NEW, {
         id: `notif-${Date.now()}`,
         type: 'ride_status',
         title: 'Ride Accepted',
@@ -537,7 +538,7 @@ exports.updateRideStatus = catchAsync(async (req, res, next) => {
 
   const io = getIO();
   if (io) {
-    io.to(`ride:${ride.id}`).emit('ride:status', { rideId: ride.id, status: targetStatus, checkoutUrl });
+    io.to(ROOMS.RIDE(ride.id)).emit(SERVER_EVENTS.RIDE_STATUS, { rideId: ride.id, status: targetStatus, checkoutUrl });
   }
 
   const statusLabels = {
@@ -556,7 +557,7 @@ exports.updateRideStatus = catchAsync(async (req, res, next) => {
         data: { rideId: ride.id, status: targetStatus },
       });
       if (io) {
-        io.to(`user:${ride.passengerId}`).emit('notification:new', {
+        io.to(ROOMS.USER(ride.passengerId)).emit(SERVER_EVENTS.NOTIFICATION_NEW, {
           id: `notif-${Date.now()}`,
           type: 'ride_status',
           title: `Ride ${targetStatus.replace(/_/g, ' ')}`,
@@ -634,7 +635,7 @@ exports.confirmPayment = catchAsync(async (req, res, next) => {
 
   const io = getIO();
   if (io) {
-    io.to(`ride:${ride.id}`).emit('ride:status', { rideId: ride.id, status: 'completed' });
+    io.to(ROOMS.RIDE(ride.id)).emit(SERVER_EVENTS.RIDE_STATUS, { rideId: ride.id, status: 'completed' });
   }
 
   try {
@@ -646,7 +647,7 @@ exports.confirmPayment = catchAsync(async (req, res, next) => {
       data: { rideId: ride.id, status: 'completed' },
     });
     if (io) {
-      io.to(`user:${ride.passengerId}`).emit('notification:new', {
+      io.to(ROOMS.USER(ride.passengerId)).emit(SERVER_EVENTS.NOTIFICATION_NEW, {
         id: `notif-${Date.now()}`,
         type: 'ride_status',
         title: 'Payment Confirmed',
@@ -716,7 +717,7 @@ exports.acknowledgePayment = catchAsync(async (req, res, next) => {
 
   const io = getIO();
   if (io) {
-    io.to(`ride:${ride.id}`).emit('ride:status', { rideId: ride.id, status: 'completed' });
+    io.to(ROOMS.RIDE(ride.id)).emit(SERVER_EVENTS.RIDE_STATUS, { rideId: ride.id, status: 'completed' });
   }
 
   try {
@@ -728,7 +729,7 @@ exports.acknowledgePayment = catchAsync(async (req, res, next) => {
       data: { rideId: ride.id, status: 'completed' },
     });
     if (io) {
-      io.to(`user:${ride.driverId}`).emit('notification:new', {
+      io.to(ROOMS.USER(ride.driverId)).emit(SERVER_EVENTS.NOTIFICATION_NEW, {
         id: `notif-${Date.now()}`,
         type: 'ride_status',
         title: 'Payment Acknowledged',
@@ -780,7 +781,7 @@ exports.reportIssue = catchAsync(async (req, res, next) => {
 
   const io = getIO();
   if (io) {
-    io.to(`ride:${ride.id}`).emit('ride:status', { rideId: ride.id, status: 'payment_dispute' });
+    io.to(ROOMS.RIDE(ride.id)).emit(SERVER_EVENTS.RIDE_STATUS, { rideId: ride.id, status: 'payment_dispute' });
   }
 
   logger.info(`Dispute ${dispute.id} filed for ride ${ride.id} by ${req.user.email}`);
@@ -833,7 +834,7 @@ exports.acceptOffer = catchAsync(async (req, res, next) => {
   const io = getIO();
   const driver = await User.findByPk(bid.driverId, { attributes: ['id', 'name', 'email', 'phone', 'profilePhoto'] });
 
-  io.to(`ride:${ride.id}`).emit('offer:accepted', {
+  io.to(ROOMS.RIDE(ride.id)).emit(SERVER_EVENTS.OFFER_ACCEPTED, {
     rideId: ride.id,
     bidId: bid.id,
     driver: driver ? driver.toJSON() : null,
@@ -849,7 +850,7 @@ exports.acceptOffer = catchAsync(async (req, res, next) => {
       message: 'Your offer has been accepted! You are now assigned to this ride.',
       data: { rideId: ride.id, bidId: bid.id, status: 'accepted' },
     });
-    io.to(`user:${bid.driverId}`).emit('notification:new', {
+    io.to(ROOMS.USER(bid.driverId)).emit(SERVER_EVENTS.NOTIFICATION_NEW, {
       id: `notif-${Date.now()}`,
       type: 'ride_status',
       title: 'Offer Accepted',
@@ -896,7 +897,7 @@ exports.cancelRide = catchAsync(async (req, res, next) => {
 
   const io = getIO();
   if (io) {
-    io.to(`ride:${ride.id}`).emit('ride:status', { rideId: ride.id, status: 'cancelled' });
+    io.to(ROOMS.RIDE(ride.id)).emit(SERVER_EVENTS.RIDE_STATUS, { rideId: ride.id, status: 'cancelled' });
   }
 
   if (ride.driverId) {
@@ -909,7 +910,7 @@ exports.cancelRide = catchAsync(async (req, res, next) => {
         data: { rideId: ride.id, status: 'cancelled' },
       });
       if (io) {
-        io.to(`user:${ride.driverId}`).emit('notification:new', {
+        io.to(ROOMS.USER(ride.driverId)).emit(SERVER_EVENTS.NOTIFICATION_NEW, {
           id: `notif-${Date.now()}`,
           type: 'ride_status',
           title: 'Ride Cancelled',

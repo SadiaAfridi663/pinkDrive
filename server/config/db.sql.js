@@ -1,4 +1,6 @@
 const { Sequelize } = require('sequelize');
+const { Umzug, SequelizeStorage } = require('umzug');
+const path = require('path');
 const logger = require('../utils/logger');
 
 const sequelize = new Sequelize(
@@ -21,13 +23,45 @@ const sequelize = new Sequelize(
   },
 );
 
+const runMigrations = async () => {
+  const umzug = new Umzug({
+    migrations: {
+      glob: path.join(__dirname, '..', 'migrations', '*.js'),
+      resolve: ({ name, path: migrationPath }) => {
+        const migration = require(migrationPath);
+        return {
+          name,
+          up: async () => migration.up(queryInterface, Sequelize),
+          down: async () => migration.down(queryInterface, Sequelize),
+        };
+      },
+    },
+    context: { queryInterface: sequelize.getQueryInterface(), Sequelize },
+    storage: new SequelizeStorage({ sequelize }),
+    logger: {
+      info: (msg) => logger.info(msg),
+      warn: (msg) => logger.warn(msg),
+      error: (msg) => logger.error(msg),
+      debug: (msg) => logger.debug(msg),
+    },
+  });
+
+  const pending = await umzug.pending();
+  if (pending.length > 0) {
+    logger.info(`Running ${pending.length} pending migration(s)...`);
+    await umzug.up();
+    logger.info('Migrations completed');
+  } else {
+    logger.info('No pending migrations');
+  }
+};
+
 const connectSQL = async () => {
   try {
     await sequelize.authenticate();
     logger.info('PostgreSQL connected');
     if (process.env.NODE_ENV === 'development') {
-      await sequelize.sync({ alter: true });
-      logger.info('PostgreSQL models synced');
+      await runMigrations();
     }
   } catch (error) {
     logger.error(`PostgreSQL connection error: ${error.message}`);

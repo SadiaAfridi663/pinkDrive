@@ -8,6 +8,7 @@ const AppError = require('../utils/AppError');
 const catchAsync = require('../utils/catchAsync');
 const logger = require('../utils/logger');
 const { getIO } = require('../sockets');
+const { SERVER_EVENTS, ROOMS } = require('../sockets/events');
 
 exports.triggerSOS = catchAsync(async (req, res, next) => {
   const { rideId, lat, lng } = req.body;
@@ -40,7 +41,7 @@ exports.triggerSOS = catchAsync(async (req, res, next) => {
 
   const io = getIO();
   if (io) {
-    io.to('admin-room').emit('sos:alert', {
+    io.to(ROOMS.ADMIN).emit(SERVER_EVENTS.SOS_ALERT, {
       alertId: alert.id,
       userId: req.user.id,
       userName: req.user.name,
@@ -70,7 +71,7 @@ exports.triggerSOS = catchAsync(async (req, res, next) => {
           data: { alertId: alert.id, userId: req.user.id, rideId: ride?.id || null },
         })
       ));
-      io.to('admin-room').emit('notification:new', {
+      io.to(ROOMS.ADMIN).emit(SERVER_EVENTS.NOTIFICATION_NEW, {
         id: `notif-${Date.now()}`,
         type: 'sos_alert',
         title: 'SOS Alert',
@@ -104,7 +105,7 @@ exports.resolveAlert = catchAsync(async (req, res, next) => {
 
   const io = getIO();
   if (io) {
-    io.to('admin-room').emit('sos:resolved', { alertId: alert.id });
+    io.to(ROOMS.ADMIN).emit(SERVER_EVENTS.SOS_RESOLVED, { alertId: alert.id });
   }
 
   logger.info(`SOS alert ${alert.id} resolved by ${req.user.email}`);

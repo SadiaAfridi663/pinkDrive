@@ -11,7 +11,12 @@ const {
   acceptRequest,
   declineRequest,
   cancelTrip,
+  leaveTrip,
+  removePassenger,
   updateTripStatus,
+  driverArriving,
+  boardPassenger,
+  dropoffPassenger,
   getAcceptedPassengers,
 } = require('../controllers/sharedTripController');
 
@@ -68,8 +73,13 @@ router.post(
 router.get('/:tripId/requests', authorize('driver'), getTripRequests);
 
 router.patch('/:tripId/cancel', authorize('driver'), cancelTrip);
+router.patch('/:tripId/leave', authorize('passenger'), leaveTrip);
+router.patch('/:tripId/remove-passenger/:passengerId', authorize('driver'), removePassenger);
 
 router.patch('/:tripId/status', authorize('driver'), updateTripStatus);
+router.patch('/:tripId/driver-arriving', authorize('driver'), driverArriving);
+router.patch('/:tripId/passenger-board/:requestId', authorize('driver'), boardPassenger);
+router.patch('/:tripId/passenger-drop/:requestId', authorize('driver'), dropoffPassenger);
 router.get('/:tripId/accepted-passengers', authorize('driver'), getAcceptedPassengers);
 
 const requestRouter = express.Router();

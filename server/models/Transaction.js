@@ -47,6 +47,11 @@ const Transaction = sequelize.define('Transaction', {
     allowNull: true,
     references: { model: 'rides', key: 'id' },
   },
+  tripRequestId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: { model: 'trip_requests', key: 'id' },
+  },
   status: {
     type: DataTypes.STRING,
     defaultValue: 'completed',
