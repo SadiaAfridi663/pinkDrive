@@ -62,3 +62,17 @@ exports.getUnreadCount = catchAsync(async (req, res, next) => {
 
   res.status(200).json({ success: true, data: { unreadCount: count } });
 });
+
+exports.deleteNotification = catchAsync(async (req, res, next) => {
+  const { id } = req.params;
+
+  const notification = await Notification.findByPk(id);
+  if (!notification) return next(new AppError('Notification not found.', 404));
+  if (notification.userId !== req.user.id) return next(new AppError('Unauthorized.', 403));
+
+  await notification.destroy();
+
+  logger.info(`Notification ${id} deleted by user ${req.user.id}`);
+
+  res.status(200).json({ success: true, message: 'Notification deleted.' });
+});

@@ -141,7 +141,7 @@ function DashboardView() {
         </div>
       )}
 
-      {isVerified && sharedTrips.length > 0 && (
+      {isVerified && (
         <div className="bg-white rounded-2xl border border-[#F0E0E8] overflow-hidden shadow-sm mb-6">
           <div className="px-5 py-4 border-b border-[#F0E0E8] flex items-center justify-between">
             <h3 className="text-xs font-bold text-[#8B8B9E] uppercase tracking-wider m-0">Your Shared Trips</h3>
@@ -150,28 +150,42 @@ function DashboardView() {
             </button>
           </div>
           <div className="divide-y divide-[#F0E0E8]">
-            {sharedTrips.filter((t) => t.status === 'active' || t.status === 'full').map((trip) => (
-              <div key={trip.id} className="px-5 py-3.5 flex items-center justify-between hover:bg-[#FFF8FA] transition">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-full bg-amber-50 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-4 h-4 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 14l2-5h14l2 5" /><path d="M5 14v3a1 1 0 001 1h2a1 1 0 001-1v-1" /><path d="M15 17a1 1 0 001 1h2a1 1 0 001-1v-1" /></svg>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-[#1A1A1A] m-0 truncate">{trip.pickupAddress || `${trip.pickupLat?.toFixed(4)}, ${trip.pickupLng?.toFixed(4)}`} → {trip.dropoffAddress || `${trip.dropoffLat?.toFixed(4)}, ${trip.dropoffLng?.toFixed(4)}`}</p>
-                    <p className="text-[0.6rem] text-[#8B8B9E] m-0 mt-0.5">
-                      {new Date(trip.departureTime).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      {' · '}
-                      {trip.availableSeats} {trip.availableSeats === 1 ? 'seat' : 'seats'} · {trip.pricePerSeat} PKR/seat
-                    </p>
-                  </div>
-                </div>
-                <span className={`flex-shrink-0 text-[0.55rem] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${trip.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{trip.status}</span>
+            {sharedTrips.length === 0 ? (
+              <div className="px-5 py-8 text-center text-[#8B8B9E] text-sm">
+                You haven’t created any trips yet.
               </div>
-            ))}
+            ) : (() => {
+              const activeTrips = sharedTrips.filter(t => t.status === 'active' || t.status === 'full');
+              if (activeTrips.length === 0) {
+                return (
+                  <div className="px-5 py-8 text-center text-[#8B8B9E] text-sm">
+                    No active trips available.
+                  </div>
+                );
+              }
+              return activeTrips.map((trip) => (
+                <div key={trip.id} className="px-5 py-3.5 flex items-center justify-between hover:bg-[#FFF8FA] transition">
+                  {/* trip item content as before */}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-full bg-amber-50 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-4 h-4 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 14l2-5h14l2 5" /><path d="M5 14v3a1 1 0 001 1h2a1 1 0 001-1v-1" /><path d="M15 17a1 1 0 001 1h2a1 1 0 001-1v-1" /></svg>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-[#1A1A1A] m-0 truncate">{trip.pickupAddress || `${trip.pickupLat?.toFixed(4)}, ${trip.pickupLng?.toFixed(4)}`} → {trip.dropoffAddress || `${trip.dropoffLat?.toFixed(4)}, ${trip.dropoffLng?.toFixed(4)}`}</p>
+                      <p className="text-[0.6rem] text-[#8B8B9E] m-0 mt-0.5">
+                        {new Date(trip.departureTime).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        {' · '}
+                        {trip.availableSeats} {trip.availableSeats === 1 ? 'seat' : 'seats'} · {trip.pricePerSeat} PKR/seat
+                      </p>
+                    </div>
+                  </div>
+                  <span className={`flex-shrink-0 text-[0.55rem] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${trip.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{trip.status}</span>
+                </div>
+              ));
+            })()}
           </div>
         </div>
       )}
-
       {isVerified && (
         (() => {
           const activeTrip = sharedTrips.find(t => t.status === 'active' || t.status === 'full' || t.status === 'in_progress');
@@ -238,6 +252,7 @@ function DashboardView() {
 }
 
 function TripRequestsView() {
+  const navigate = useNavigate();
   const [trips, setTrips] = useState([]);
   const [requests, setRequests] = useState({});
   const [loading, setLoading] = useState(true);
@@ -322,13 +337,29 @@ function TripRequestsView() {
       )}
 
       {!hasRequests ? (
-        <div className="bg-white rounded-2xl border border-[#F0E0E8] p-10 text-center shadow-sm">
-          <div className="mx-auto mb-4 w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center">
-            <svg className="w-8 h-8 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 14l2-5h14l2 5" /><path d="M5 14v3a1 1 0 001 1h2a1 1 0 001-1v-1" /><path d="M15 17a1 1 0 001 1h2a1 1 0 001-1v-1" /></svg>
+        trips.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-[#F0E0E8] p-10 text-center shadow-sm">
+            <div className="mx-auto mb-4 w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center">
+              <svg className="w-8 h-8 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 2v20M2 12h20" /></svg>
+            </div>
+            <h3 className="text-lg font-bold text-[#880E4F] m-0 mb-2">No Shared Trips Created</h3>
+            <p className="text-sm text-[#8B8B9E] m-0 max-w-sm mx-auto mb-4">You haven't created any shared trips yet. Create your first trip to start receiving passenger requests.</p>
+            <button
+              onClick={() => navigate('/driver/create-trip')}
+              className="px-6 py-2.5 bg-[#E91E8C] text-white font-semibold text-sm rounded-xl hover:bg-[#C2185B] transition cursor-pointer border-none"
+            >
+              Create a Trip
+            </button>
           </div>
-          <h3 className="text-lg font-bold text-[#880E4F] m-0 mb-2">No Trip Requests Yet</h3>
-          <p className="text-sm text-[#8B8B9E] m-0 max-w-sm mx-auto">When passengers request to join your shared trip, they'll appear here. Create a shared trip to get started.</p>
-        </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-[#F0E0E8] p-10 text-center shadow-sm">
+            <div className="mx-auto mb-4 w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center">
+              <svg className="w-8 h-8 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 14l2-5h14l2 5" /><path d="M5 14v3a1 1 0 001 1h2a1 1 0 001-1v-1" /><path d="M15 17a1 1 0 001 1h2a1 1 0 001-1v-1" /></svg>
+            </div>
+            <h3 className="text-lg font-bold text-[#880E4F] m-0 mb-2">No Trip Requests Yet</h3>
+            <p className="text-sm text-[#8B8B9E] m-0 max-w-sm mx-auto">When passengers request to join your shared trip, they'll appear here.</p>
+          </div>
+        )
       ) : (
         <div className="space-y-4">
           {trips.map((trip) => {
@@ -408,6 +439,9 @@ function TripRequestsView() {
                           dropoff={{ lat: trip.dropoffLat, lng: trip.dropoffLng }}
                           secondaryPickup={{ lat: req.pickupLat, lng: req.pickupLng }}
                           secondaryDropoff={{ lat: req.dropoffLat, lng: req.dropoffLng }}
+                          passengerMarkers={[
+                            { lat: req.pickupLat, lng: req.pickupLng, passengerPhoto: req.passengerPhoto, name: req.passengerName || 'Passenger' },
+                          ]}
                           height="128px"
                         />
                       </div>
@@ -471,25 +505,24 @@ function DriverHub() {
   }, []);
   const isVerified = verData?.status === 'approved';
 
-  const baseViews = {
-    dashboard: { label: 'Dashboard', subtitle: 'Earnings at a glance', icon: 'dashboard', component: DashboardView },
-    ...(!isVerified ? { documents: { label: 'Documents', subtitle: 'Verification documents', icon: 'fileCheck', component: DriverVerification } } : {}),
-  };
+  const verified = verData?.status === 'approved';
 
-  const verifiedViews = {
+  const views = {
+    dashboard: { label: 'Dashboard', subtitle: 'Earnings at a glance', icon: 'dashboard', component: DashboardView },
     rides: { label: 'Rides', subtitle: 'Accept and manage rides', icon: 'car', component: DriverRides },
     'trip-requests': { label: 'Trip Requests', subtitle: 'Passengers requesting seats', icon: 'carPlus', component: TripRequestsView },
     earnings: { label: 'Earnings', subtitle: 'Track your revenue', icon: 'chart', component: DriverEarnings },
     withdraw: { label: 'Withdraw', subtitle: 'Request a payout', icon: 'walletArrow', component: DriverWithdraw },
+    documents: { label: 'Documents', subtitle: verified ? 'Verification approved' : 'Verification documents', icon: 'fileCheck', component: DriverVerification },
   };
 
   const tabParam = searchParams.get('tab');
-  const validTabs = { ...baseViews, ...(isVerified ? verifiedViews : {}) };
+  const validTabs = views;
   const defaultTab = tabParam && validTabs[tabParam] ? tabParam : 'dashboard';
 
   return (
     <DashboardLayout
-      views={{ ...baseViews, ...(isVerified ? verifiedViews : {}) }}
+      views={views}
       defaultTab={defaultTab}
     />
   );

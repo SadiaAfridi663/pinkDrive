@@ -53,7 +53,7 @@ const SharedTrip = sequelize.define('SharedTrip', {
     type: DataTypes.STRING,
     defaultValue: 'cash',
     validate: {
-      isIn: [['cash', 'wallet']],
+      isIn: [['cash', 'wallet', 'stripe']],
     },
   },
   status: {
@@ -82,6 +82,12 @@ const SharedTrip = sequelize.define('SharedTrip', {
 }, {
   timestamps: true,
   tableName: 'shared_trips',
+  indexes: [
+    { fields: ['driverId'] },
+    { fields: ['status'] },
+    { fields: ['departureTime'] },
+    { fields: ['status', 'departureTime'] },
+  ],
 });
 
 module.exports = SharedTrip;

@@ -79,6 +79,13 @@ const TripRequest = sequelize.define('TripRequest', {
 }, {
   timestamps: true,
   tableName: 'trip_requests',
+  indexes: [
+    { fields: ['tripId'] },
+    { fields: ['passengerId'] },
+    { fields: ['status'] },
+    { fields: ['tripId', 'status'] },
+    { fields: ['passengerId', 'status'] },
+  ],
 });
 
 module.exports = TripRequest;

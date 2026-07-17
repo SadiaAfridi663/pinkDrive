@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { createPassengerMarker, createDriverMarker } from './map/PassengerMapMarker';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -64,11 +65,7 @@ const CAR_ICON = L.divIcon({
 const ROUTE_COLOR = '#e9408b';
 const ROUTE_WEIGHT = 5;
 
-const API_URL = import.meta.env.VITE_API_URL
-  ? import.meta.env.VITE_API_URL.replace('/api', '')
-  : 'http://localhost:5000';
-
-function RideRouteMap({ pickup, dropoff, driverLocation, passengerLocation, nearbyDrivers, secondaryPickup, secondaryDropoff, secondaryColor, height, className, passengerMarkers }) {
+function RideRouteMap({ pickup, dropoff, driverLocation, driverPhoto, driverName, passengerLocation, nearbyDrivers, secondaryPickup, secondaryDropoff, secondaryColor, height, className, passengerMarkers }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const pickupMarkerRef = useRef(null);
@@ -283,15 +280,18 @@ function RideRouteMap({ pickup, dropoff, driverLocation, passengerLocation, near
       if (driverMarkerRef.current) {
         driverMarkerRef.current.setLatLng([driverLocation.lat, driverLocation.lng]);
       } else {
-        driverMarkerRef.current = L.marker([driverLocation.lat, driverLocation.lng], { icon: BLUE_ICON })
-          .addTo(map).bindPopup('Driver');
+        const icon = driverPhoto
+          ? createDriverMarker({ ...driverLocation, driverPhoto, name: driverName })
+          : BLUE_ICON;
+        driverMarkerRef.current = L.marker([driverLocation.lat, driverLocation.lng], { icon })
+          .addTo(map).bindPopup(driverName || 'Driver');
       }
       fitAll();
     } else if (driverMarkerRef.current) {
       map.removeLayer(driverMarkerRef.current);
       driverMarkerRef.current = null;
     }
-  }, [driverLocation]);
+  }, [driverLocation, driverPhoto, driverName]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -335,12 +335,7 @@ function RideRouteMap({ pickup, dropoff, driverLocation, passengerLocation, near
 
     if (passengerMarkers) {
       for (const pm of passengerMarkers) {
-        const photoUrl = pm.photoUrl || (pm.passengerPhoto ? `${API_URL}/${pm.passengerPhoto.replace(/\\/g, '/')}` : null);
-        const initial = (pm.name || pm.passengerName || 'P')[0];
-        const html = photoUrl
-          ? `<div style="width:36px;height:36px;border-radius:50%;border:3px solid #e9408b;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,0.3);background:white;"><img src="${photoUrl}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.parentElement.textContent='${initial}'" /></div>`
-          : `<div style="width:36px;height:36px;border-radius:50%;border:3px solid #e9408b;display:flex;align-items:center;justify-content:center;background:#FCE4EC;color:#E91E8C;font-weight:bold;font-size:16px;box-shadow:0 2px 6px rgba(0,0,0,0.3);">${initial}</div>`;
-        const icon = L.divIcon({ html, className: '', iconSize: [36, 36], iconAnchor: [18, 18] });
+        const icon = createPassengerMarker({ lat: pm.lat, lng: pm.lng, passengerPhoto: pm.passengerPhoto, photoUrl: pm.photoUrl, name: pm.name || pm.passengerName });
         const m = L.marker([pm.lat, pm.lng], { icon })
           .addTo(map)
           .bindPopup(pm.name || pm.passengerName || 'Passenger');

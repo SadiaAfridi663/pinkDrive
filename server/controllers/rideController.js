@@ -113,7 +113,7 @@ exports.createRide = catchAsync(async (req, res, next) => {
         role: 'driver',
         isDriverVerified: true,
       },
-      attributes: ['id', 'name'],
+    attributes: ['id', 'name', 'profilePhoto'],
     });
 
     const nearbyDrivers = drivers.filter((d) => {
@@ -289,13 +289,15 @@ exports.getPendingRides = catchAsync(async (req, res, next) => {
   const passengerIds = [...new Set(rides.map((r) => r.passengerId))];
   const passengers = await User.findAll({
     where: { id: passengerIds },
-    attributes: ['id', 'name'],
+    attributes: ['id', 'name', 'profilePhoto'],
   });
   const passengerMap = Object.fromEntries(passengers.map((p) => [p.id, p]));
 
   const data = rides.map((r) => ({
     ...r.toJSON(),
-    passenger: passengerMap[r.passengerId] || null,
+    passenger: passengerMap[r.passengerId]
+      ? { ...passengerMap[r.passengerId].toJSON(), profilePhoto: passengerMap[r.passengerId].profilePhoto ? fileToUrl(passengerMap[r.passengerId].profilePhoto) : null }
+      : null,
   }));
 
   res.status(200).json({ success: true, data: { rides: data } });

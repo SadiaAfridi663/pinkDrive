@@ -166,7 +166,7 @@ function ActiveRide() {
 
         {ride.status !== 'cancelled' && (
           <div className="mb-4 rounded-sm overflow-hidden border-2 border-border">
-            <RideRouteMap pickup={pickup} dropoff={dropoff} driverLocation={driverLocation} passengerLocation={passengerLocation} height="240px" />
+            <RideRouteMap pickup={pickup} dropoff={dropoff} driverLocation={driverLocation} driverPhoto={driver.profilePhoto} driverName={driver.name} passengerLocation={passengerLocation} height="240px" />
           </div>
         )}
 

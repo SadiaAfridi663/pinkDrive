@@ -18,7 +18,6 @@ const NAV_ITEMS = {
     { to: '/wallet', label: 'Wallet', icon: 'wallet' },
     { to: '/wallet/earnings', label: 'Earnings', icon: 'chart' },
     { to: '/wallet/withdraw', label: 'Withdraw', icon: 'walletArrow' },
-    { to: '/driver/verification', label: 'Documents', icon: 'fileCheck' },
   ],
   admin: [
     { to: '/admin', label: 'Dashboard', icon: 'dashboard' },

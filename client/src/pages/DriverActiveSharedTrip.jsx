@@ -44,6 +44,7 @@ function DriverActiveSharedTrip() {
   const [statusLoading, setStatusLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(null);
   const [passengerLocations, setPassengerLocations] = useState({});
+  const [driverLocation, setDriverLocation] = useState(null);
 
   const fetchData = async () => {
     try {
@@ -123,6 +124,7 @@ function DriverActiveSharedTrip() {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setDriverLocation(loc);
           socket.emit(CLIENT_EVENTS.LOCATION_UPDATE, { lat: loc.lat, lng: loc.lng });
         },
         () => {},
@@ -176,6 +178,31 @@ function DriverActiveSharedTrip() {
     }
   };
 
+  const handleCancelTrip = async () => {
+    if (!window.confirm('Cancel this shared trip? All passengers will be notified.')) return;
+    setStatusLoading(true);
+    try {
+      await sharedTripAPI.cancelTrip(tripId);
+      navigate('/driver');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to cancel trip.');
+    } finally {
+      setStatusLoading(false);
+    }
+  };
+
+  const handleRemovePassenger = async (passengerId) => {
+    if (!window.confirm('Remove this passenger from the trip?')) return;
+    setActionLoading(`remove-${passengerId}`);
+    try {
+      await sharedTripAPI.removePassenger(tripId, passengerId);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to remove passenger.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleDropoffPassenger = async (requestId) => {
     setActionLoading(requestId);
     try {
@@ -214,11 +241,12 @@ function DriverActiveSharedTrip() {
     cancelled: 'bg-red-50 text-red-600 border-red-200',
   };
 
+  const isInProgress = trip.status === 'in_progress';
   const passengerMarkers = passengers.map(p => {
     const live = passengerLocations[p.passengerId];
     return {
-      lat: live ? live.lat : p.pickupLat,
-      lng: live ? live.lng : p.pickupLng,
+      lat: live ? live.lat : (isInProgress ? p.dropoffLat : p.pickupLat),
+      lng: live ? live.lng : (isInProgress ? p.dropoffLng : p.pickupLng),
       passengerPhoto: p.passengerPhoto,
       name: p.passengerName,
       isLive: !!live,
@@ -269,6 +297,9 @@ function DriverActiveSharedTrip() {
             <RideRouteMap
               pickup={{ lat: trip.pickupLat, lng: trip.pickupLng }}
               dropoff={{ lat: trip.dropoffLat, lng: trip.dropoffLng }}
+              driverLocation={driverLocation}
+              driverPhoto={trip.driverPhoto}
+              driverName={trip.driverName}
               passengerMarkers={passengerMarkers}
               height="280px"
             />
@@ -320,6 +351,16 @@ function DriverActiveSharedTrip() {
               {statusLoading ? 'Updating...' : 'Complete Trip'}
             </button>
           )}
+
+          {(trip.status === 'active' || trip.status === 'full') && (
+            <button
+              onClick={handleCancelTrip}
+              disabled={statusLoading}
+              className="w-full bg-white border-2 border-red-200 text-red-500 font-semibold text-sm py-3 rounded-xl hover:bg-red-50 transition cursor-pointer disabled:opacity-50"
+            >
+              Cancel Trip
+            </button>
+          )}
         </div>
       </div>
 
@@ -352,18 +393,35 @@ function DriverActiveSharedTrip() {
                     </div>
                     <p className="text-xs text-[#8B8B9E] m-0 mt-0.5">Pickup: {p.pickupAddress || `${p.pickupLat?.toFixed(4)}, ${p.pickupLng?.toFixed(4)}`}</p>
                     <p className="text-xs text-[#8B8B9E] m-0">Dropoff: {p.dropoffAddress || `${p.dropoffLat?.toFixed(4)}, ${p.dropoffLng?.toFixed(4)}`}</p>
+                    {p.status === 'dropped_off' && trip?.paymentMethod && (
+                      <p className="text-[0.55rem] font-semibold m-0 mt-0.5 uppercase tracking-wider">
+                        {trip.paymentMethod === 'cash'
+                          ? <span className="text-emerald-600">Cash {p.isPaid ? 'collected' : 'pending'}</span>
+                          : <span className="text-[#8B8B9E]">{trip.paymentMethod} — {p.isPaid ? 'paid' : 'pending'}</span>
+                        }
+                      </p>
+                    )}
                   </div>
                 </div>
                 {/* Per-passenger lifecycle actions */}
                 <div className="flex gap-2 ml-16">
                   {(p.status === 'accepted' || p.status === 'driver_arriving') && (
-                    <button
-                      onClick={() => handleBoardPassenger(p.id)}
-                      disabled={actionLoading === p.id}
-                      className="text-xs bg-violet-500 text-white font-semibold py-1.5 px-3 rounded-lg hover:bg-violet-600 transition cursor-pointer border-none disabled:opacity-50"
-                    >
-                      {actionLoading === p.id ? '...' : 'Mark Boarded'}
-                    </button>
+                    <>
+                      <button
+                        onClick={() => handleBoardPassenger(p.id)}
+                        disabled={actionLoading === p.id || actionLoading === `remove-${p.passengerId}`}
+                        className="text-xs bg-violet-500 text-white font-semibold py-1.5 px-3 rounded-lg hover:bg-violet-600 transition cursor-pointer border-none disabled:opacity-50"
+                      >
+                        {actionLoading === p.id ? '...' : 'Mark Boarded'}
+                      </button>
+                      <button
+                        onClick={() => handleRemovePassenger(p.passengerId)}
+                        disabled={actionLoading === `remove-${p.passengerId}` || actionLoading === p.id}
+                        className="text-xs bg-white border border-red-200 text-red-500 font-semibold py-1.5 px-3 rounded-lg hover:bg-red-50 transition cursor-pointer disabled:opacity-50"
+                      >
+                        {actionLoading === `remove-${p.passengerId}` ? '...' : 'Remove'}
+                      </button>
+                    </>
                   )}
                   {(p.status === 'passenger_boarded' || p.status === 'in_progress') && (
                     <button

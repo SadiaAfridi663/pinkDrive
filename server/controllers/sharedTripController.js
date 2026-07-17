@@ -429,11 +429,11 @@ exports.acceptRequest = catchAsync(async (req, res, next) => {
   }
 
   // Initiate payment hold for non-cash methods
-  holdPayment(request, trip);
+  const paymentResult = await holdPayment(request, trip);
 
   res.status(200).json({
     success: true,
-    data: { request, trip },
+    data: { request, trip, paymentResult },
     message: 'Passenger accepted. Seats updated.',
   });
 });
@@ -725,6 +725,32 @@ exports.removePassenger = catchAsync(async (req, res, next) => {
   res.status(200).json({ success: true, message: 'Passenger removed from trip.' });
 });
 
+exports.retractRequest = catchAsync(async (req, res, next) => {
+  const { tripId } = req.params;
+
+  const request = await TripRequest.findOne({
+    where: { tripId, passengerId: req.user.id, status: 'pending' },
+    include: [{ model: SharedTrip, as: 'trip', attributes: ['driverId'] }],
+  });
+  if (!request) return next(new AppError('No pending request found for this trip.', 404));
+
+  request.status = 'cancelled';
+  await request.save();
+
+  logger.info(`Passenger ${req.user.email} retracted request for trip ${tripId}`);
+
+  const io = getIO();
+  if (io) {
+    io.to(ROOMS.DRIVER(request.trip.driverId)).emit(SERVER_EVENTS.TRIP_REQUEST_CANCELLED, {
+      tripId,
+      requestId: request.id,
+      passengerId: req.user.id,
+    });
+  }
+
+  res.status(200).json({ success: true, message: 'Request retracted.' });
+});
+
 const TRIP_STATUS_FLOW = ['active', 'full', 'in_progress', 'completed'];
 
 exports.updateTripStatus = catchAsync(async (req, res, next) => {
@@ -759,6 +785,17 @@ exports.updateTripStatus = catchAsync(async (req, res, next) => {
     );
   }
   if (status === 'completed') {
+    // Capture payments for all active passengers before completing them
+    const activeRequests = await TripRequest.findAll({
+      where: { tripId, status: { [Op.in]: ['accepted', 'driver_arriving', 'passenger_boarded', 'in_progress'] } },
+    });
+    for (const req of activeRequests) {
+      try {
+        await capturePayment(req, trip);
+      } catch (err) {
+        logger.error(`Failed to capture payment for request ${req.id} on trip complete: ${err.message}`);
+      }
+    }
     // Complete all active passengers (not yet dropped off)
     await TripRequest.update(
       { status: 'completed' },
@@ -951,7 +988,7 @@ exports.dropoffPassenger = catchAsync(async (req, res, next) => {
   });
 
   // Capture payment on dropoff
-  capturePayment(request, trip);
+  await capturePayment(request, trip);
 
   // Auto-complete trip if all passengers have been dropped off
   if (await isAllPassengersDropped(tripId)) {
@@ -992,6 +1029,33 @@ exports.dropoffPassenger = catchAsync(async (req, res, next) => {
     data: { request, tripCompleted: trip.status === 'completed' },
     message: trip.status === 'completed' ? 'Passenger dropped off. Trip completed.' : 'Passenger dropped off.',
   });
+});
+
+/**
+ * Restore full state for a reconnecting user — returns active shared trips and requests.
+ * Used by the frontend on socket reconnect.
+ */
+exports.getRestoreState = catchAsync(async (req, res, next) => {
+  const userId = req.user.id;
+  const role = req.user.role;
+
+  let driverTrip = null;
+  let passengerRequests = [];
+
+  if (role === 'driver') {
+    driverTrip = await SharedTrip.findOne({
+      where: { driverId: userId, status: { [Op.in]: ['active', 'full', 'in_progress'] } },
+    });
+  }
+
+  if (role === 'passenger') {
+    passengerRequests = await TripRequest.findAll({
+      where: { passengerId: userId, status: { [Op.in]: ['accepted', 'driver_arriving', 'passenger_boarded', 'in_progress'] } },
+      include: [{ model: SharedTrip, as: 'trip', attributes: ['id', 'driverId', 'pickupLat', 'pickupLng', 'pickupAddress', 'dropoffLat', 'dropoffLng', 'dropoffAddress', 'departureTime', 'pricePerSeat', 'paymentMethod', 'availableSeats', 'status', 'driverLat', 'driverLng', 'startedAt'] }],
+    });
+  }
+
+  res.status(200).json({ success: true, data: { driverTrip, passengerRequests } });
 });
 
 exports.getAcceptedPassengers = catchAsync(async (req, res, next) => {

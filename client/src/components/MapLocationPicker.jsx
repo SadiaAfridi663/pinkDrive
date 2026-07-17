@@ -33,6 +33,7 @@ function MapLocationPicker({ onSelect, label, initialPosition: rawPos, otherMark
   const initialPosition = rawPos
     ? Array.isArray(rawPos) ? { lat: rawPos[0], lng: rawPos[1] } : rawPos
     : null;
+  const userLocationCenteredRef = useRef(false);
 
   useEffect(() => {
     if (mapRef.current) return;
@@ -114,8 +115,11 @@ function MapLocationPicker({ onSelect, label, initialPosition: rawPos, otherMark
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    console.log('[MapLocationPicker] userLocation updated:', userLocation);
     if (userLocation) {
+      if (!userLocationCenteredRef.current && !initialPosition) {
+        map.setView([userLocation.lat, userLocation.lng], DEFAULT_ZOOM);
+        userLocationCenteredRef.current = true;
+      }
       if (userDotRef.current) {
         userDotRef.current.setLatLng([userLocation.lat, userLocation.lng]);
       } else {

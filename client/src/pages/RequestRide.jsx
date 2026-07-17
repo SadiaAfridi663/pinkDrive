@@ -30,6 +30,7 @@ function RequestRideInner() {
   const [walletBalance, setWalletBalance] = useState(null);
   const [passengerOffer, setPassengerOffer] = useState('');
   const [error, setError] = useState('');
+  const [walletError, setWalletError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [sharedTrips, setSharedTrips] = useState([]);
   const [selectedTrip, setSelectedTrip] = useState(null);
@@ -166,6 +167,17 @@ function RequestRideInner() {
 
   const handleRequestJoin = async (tripId) => {
     if (!pickup || !dropoff) return;
+    const trip = sharedTrips.find(t => t.tripId === tripId || t.id === tripId);
+    if (trip?.paymentMethod === 'wallet') {
+      if (walletBalance === null || walletBalance < parseFloat(trip.pricePerSeat)) {
+        setWalletError({
+          balance: walletBalance ?? 0,
+          required: parseFloat(trip.pricePerSeat),
+          tripId,
+        });
+        return;
+      }
+    }
     setLoading(true);
     try {
       await sharedTripAPI.requestJoin(tripId, {
@@ -381,6 +393,9 @@ function RequestRideInner() {
                           <div className="text-right">
                             <p className="text-lg font-bold text-amber-700 font-mono m-0">{trip.pricePerSeat} PKR</p>
                             <p className="text-[0.55rem] text-[#8B8B9E] m-0">per seat</p>
+                            {trip.paymentMethod === 'wallet' && walletBalance !== null && walletBalance < parseFloat(trip.pricePerSeat) && (
+                              <p className="text-[0.5rem] text-red-500 font-semibold m-0 mt-0.5">Insufficient wallet</p>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center gap-2 text-xs text-[#8B8B9E] mb-3">
@@ -663,6 +678,39 @@ function RequestRideInner() {
                   className="flex-1 bg-amber-500 text-white font-bold text-sm py-2.5 rounded-xl hover:bg-amber-600 transition cursor-pointer border-none disabled:opacity-50"
                 >
                   {loading ? 'Requesting...' : 'Request to Join'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {walletError && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={() => setWalletError(null)}>
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="text-center">
+              <div className="mx-auto mb-4 w-14 h-14 bg-red-50 rounded-full flex items-center justify-center">
+                <svg className="w-7 h-7 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+              </div>
+              <h3 className="text-lg font-bold text-[#880E4F] m-0 mb-2">Insufficient Wallet Balance</h3>
+              <p className="text-sm text-[#8B8B9E] m-0 mb-1">
+                Your wallet balance is <strong className="text-[#1A1A1A]">{walletError.balance} PKR</strong>.
+              </p>
+              <p className="text-sm text-[#8B8B9E] m-0 mb-6">
+                You need at least <strong className="text-[#1A1A1A]">{walletError.required} PKR</strong> to join this ride.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setWalletError(null)}
+                  className="flex-1 py-3 rounded-xl border-2 border-[#F0E0E8] text-[#880E4F] font-semibold text-sm hover:border-[#E91E8C] transition cursor-pointer bg-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => { setWalletError(null); navigate('/passenger?tab=wallet'); }}
+                  className="flex-1 py-3 rounded-xl bg-[#E91E8C] text-white font-bold text-sm hover:bg-[#C2185B] transition cursor-pointer border-none"
+                >
+                  Add Money
                 </button>
               </div>
             </div>

@@ -22,10 +22,11 @@ const TYPE_ROUTES = {
   new_review: '/driver/dashboard',
   ride_status: '/ride/active',
   sos_alert: '/admin/sos',
+  payment: '/driver/earnings',
 };
 
 function NotificationPanel({ isOpen, onClose }) {
-  const { notifications, unreadCount, refresh, markRead, markAllRead } = useNotifications();
+  const { notifications, unreadCount, refresh, markRead, markAllRead, removeNotification } = useNotifications();
   const navigate = useNavigate();
   const panelRef = useRef(null);
 
@@ -106,7 +107,7 @@ function NotificationPanel({ isOpen, onClose }) {
                 <button
                   key={n.id}
                   onClick={() => handleClick(n)}
-                  className={`w-full text-left px-5 py-4 border-b border-[#F0E0E8] transition cursor-pointer hover:bg-[#FFF8FA] ${
+                  className={`w-full text-left px-5 py-4 border-b border-[#F0E0E8] transition cursor-pointer hover:bg-[#FFF8FA] group ${
                     !n.isRead ? 'bg-[#FFF8FA]' : ''
                   }`}
                 >
@@ -126,6 +127,13 @@ function NotificationPanel({ isOpen, onClose }) {
                       )}
                       <p className="text-[0.65rem] text-[#B0B0C0] m-0 mt-1">{formatTime(n.createdAt)}</p>
                     </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); removeNotification(n.id); }}
+                      className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded-full hover:bg-[#F0E0E8] text-[#B0B0C0] hover:text-[#E91E8C] transition cursor-pointer border-none bg-transparent flex-shrink-0 mt-0.5"
+                      title="Remove notification"
+                    >
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+                    </button>
                   </div>
                 </button>
               ))}

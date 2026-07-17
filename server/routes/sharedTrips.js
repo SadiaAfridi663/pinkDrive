@@ -13,6 +13,8 @@ const {
   cancelTrip,
   leaveTrip,
   removePassenger,
+  retractRequest,
+  getRestoreState,
   updateTripStatus,
   driverArriving,
   boardPassenger,
@@ -56,6 +58,7 @@ router.get('/available', authorize('passenger'), getAvailableTrips);
 router.get('/my', authorize('driver'), getMyTrips);
 
 router.get('/requests/my', getMyRequests);
+router.get('/restore-state', getRestoreState);
 
 router.post(
   '/:tripId/request',
@@ -74,6 +77,7 @@ router.get('/:tripId/requests', authorize('driver'), getTripRequests);
 
 router.patch('/:tripId/cancel', authorize('driver'), cancelTrip);
 router.patch('/:tripId/leave', authorize('passenger'), leaveTrip);
+router.patch('/:tripId/retract-request', authorize('passenger'), retractRequest);
 router.patch('/:tripId/remove-passenger/:passengerId', authorize('driver'), removePassenger);
 
 router.patch('/:tripId/status', authorize('driver'), updateTripStatus);

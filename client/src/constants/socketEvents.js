@@ -59,6 +59,7 @@ export const SERVER_EVENTS = {
   TRIP_REQUEST_NEW: 'trip:request:new',
   TRIP_REQUEST_ACCEPTED: 'trip:request:accepted',
   TRIP_REQUEST_DECLINED: 'trip:request:declined',
+  TRIP_REQUEST_CANCELLED: 'trip:request:cancelled',
   TRIP_SEATS_UPDATE: 'trip:seats:update',
   TRIP_CANCELLED: 'trip:cancelled',
   TRIP_STATUS: 'trip:status',

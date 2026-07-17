@@ -22,6 +22,8 @@ function SharedTripDetail() {
   const [sosSending, setSosSending] = useState(false);
   const [driverLocation, setDriverLocation] = useState(null);
   const [driverLastSeen, setDriverLastSeen] = useState(null);
+  const [passengerLocation, setPassengerLocation] = useState(null);
+  const [passengerLastSeen, setPassengerLastSeen] = useState(null);
 
   const fetchRequest = useCallback(async () => {
     try {
@@ -139,9 +141,10 @@ function SharedTripDetail() {
     const intervalRef = setInterval(() => {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          socket.emit(CLIENT_EVENTS.LOCATION_UPDATE, {
-            lat: pos.coords.latitude, lng: pos.coords.longitude,
-          });
+          const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setPassengerLocation(loc);
+          setPassengerLastSeen(Date.now());
+          socket.emit(CLIENT_EVENTS.LOCATION_UPDATE, loc);
         },
         () => {},
         { enableHighAccuracy: true, timeout: 10000 },
@@ -169,9 +172,12 @@ function SharedTripDetail() {
 
   const handleCancel = async () => {
     if (!request) return;
-    const reason = window.prompt('Reason for cancellation (optional):');
     try {
-      await sharedTripAPI.cancelTrip(request.tripId);
+      if (request.status === 'pending') {
+        await sharedTripAPI.retractRequest(request.tripId);
+      } else if (['accepted', 'driver_arriving'].includes(request.status)) {
+        await sharedTripAPI.leaveTrip(request.tripId);
+      }
       navigate('/passenger');
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to cancel.');
@@ -275,7 +281,11 @@ function SharedTripDetail() {
             </div>
             <div className="bg-[#FFF8FA] rounded-xl p-4">
               <p className="text-[0.55rem] font-bold text-[#8B8B9E] uppercase tracking-wider m-0 mb-1">Payment</p>
-              <p className="text-sm font-semibold text-[#1A1A1A] m-0 capitalize">{trip.paymentMethod || 'Cash'}</p>
+              <p className="text-sm font-semibold text-[#1A1A1A] m-0 capitalize">
+                {trip.paymentMethod || 'Cash'}
+                {request.isPaid && <span className="ml-1.5 text-[0.6rem] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">paid</span>}
+                {trip.paymentMethod === 'cash' && !request.isPaid && isActiveRide && <span className="ml-1.5 text-[0.6rem] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">pay on pickup</span>}
+              </p>
             </div>
             <div className="bg-[#FFF8FA] rounded-xl p-4">
               <p className="text-[0.55rem] font-bold text-[#8B8B9E] uppercase tracking-wider m-0 mb-1">Seats Left</p>
@@ -327,16 +337,22 @@ function SharedTripDetail() {
             Route Map
           </p>
           {isActiveRide && (
-            <div className="mb-3 text-xs">
+            <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                {passengerLocation && passengerLastSeen && Date.now() - passengerLastSeen > 30000
+                  ? 'Your location stale'
+                  : passengerLocation ? 'Your location live' : 'Acquiring your location...'}
+              </span>
               {driverLocation ? (
                 <span className={`inline-flex items-center gap-1.5 ${driverLastSeen && Date.now() - driverLastSeen > 30000 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                  <span className={`w-2 h-2 rounded-full ${driverLastSeen && Date.now() - driverLastSeen > 30000 ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500 animate-pulse'}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full ${driverLastSeen && Date.now() - driverLastSeen > 30000 ? 'bg-amber-400' : 'bg-emerald-500'} animate-pulse`} />
                   {driverLastSeen && Date.now() - driverLastSeen > 30000
-                    ? `Driver location stale — last seen ${Math.round((Date.now() - driverLastSeen) / 1000)}s ago`
-                    : 'Driver location live'}
+                    ? `Driver stale — ${Math.round((Date.now() - driverLastSeen) / 1000)}s ago`
+                    : 'Driver live'}
                 </span>
               ) : (
-                <span className="text-[#8B8B9E]">Waiting for driver location...</span>
+                <span className="text-[#8B8B9E]">Waiting for driver...</span>
               )}
             </div>
           )}
@@ -345,11 +361,14 @@ function SharedTripDetail() {
           pickup={tripPickup}
           dropoff={tripDropoff}
           driverLocation={driverLocation}
+          driverPhoto={request.driverPhoto}
+          driverName={request.driverName}
+          passengerLocation={passengerLocation}
           secondaryPickup={passengerPickup}
           secondaryDropoff={passengerDropoff}
           height="260px"
         />
-        <div className="p-4 flex items-center gap-6 text-xs text-[#8B8B9E]">
+        <div className="p-4 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-[#8B8B9E]">
           <div className="flex items-center gap-1.5">
             <span className="w-3 h-0.5 rounded-full bg-[#e9408b]" />
             <span>Trip route</span>
@@ -362,6 +381,12 @@ function SharedTripDetail() {
             <div className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-full bg-blue-500 border-2 border-white shadow-sm" />
               <span>Driver</span>
+            </div>
+          )}
+          {passengerLocation && (
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full bg-orange-500 border-2 border-white shadow-sm" />
+              <span>You</span>
             </div>
           )}
         </div>
@@ -383,6 +408,14 @@ function SharedTripDetail() {
             className="flex-1 bg-white border-2 border-[#F0E0E8] text-[#8B8B9E] font-semibold text-sm py-3 rounded-xl hover:border-red-200 hover:text-red-500 transition cursor-pointer"
           >
             Cancel Request
+          </button>
+        )}
+        {['accepted', 'driver_arriving'].includes(request.status) && (
+          <button
+            onClick={handleCancel}
+            className="flex-1 bg-white border-2 border-red-200 text-red-500 font-semibold text-sm py-3 rounded-xl hover:bg-red-50 transition cursor-pointer"
+          >
+            Leave Trip
           </button>
         )}
       </div>

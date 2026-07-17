@@ -25,7 +25,16 @@ function CreateSharedTrip() {
   const [pricePerSeat, setPricePerSeat] = useState(50);
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [submitting, setSubmitting] = useState(false);
+  const [activeSharedTrip, setActiveSharedTrip] = useState(null);
   const geo = useGeolocation();
+
+  useEffect(() => {
+    sharedTripAPI.getMyTrips().then(res => {
+      const trips = res.data.data.trips || [];
+      const active = trips.find(t => ['active', 'full', 'in_progress'].includes(t.status));
+      setActiveSharedTrip(active || null);
+    }).catch(() => {});
+  }, []);
 
   const handleSubmit = async () => {
     if (!pickup || !dropoff || !departureDate || !departureTime) return;
@@ -67,6 +76,16 @@ function CreateSharedTrip() {
               <p className="text-sm text-[#8B8B9E] m-0">Offer seats along your route</p>
             </div>
           </div>
+
+          {activeSharedTrip && (
+            <div className="mb-5 flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse flex-shrink-0" />
+              <p className="text-sm text-amber-800 m-0">
+                You have a shared trip in progress —
+                <button onClick={() => navigate(`/driver/shared-trip/${activeSharedTrip.id}`)} className="font-bold text-amber-900 underline ml-1 bg-transparent border-none cursor-pointer">Manage Trip</button>
+              </p>
+            </div>
+          )}
 
           <div className="flex items-center gap-2 mb-6">
             {[1, 2, 3].map((s) => (
@@ -195,6 +214,16 @@ function CreateSharedTrip() {
                     }`}
                   >
                     Wallet
+                  </button>
+                  <button
+                    onClick={() => setPaymentMethod('stripe')}
+                    className={`flex-1 py-3 rounded-xl text-sm font-bold border-2 transition cursor-pointer ${
+                      paymentMethod === 'stripe'
+                        ? 'bg-[#FCE4EC] border-[#E91E8C] text-[#E91E8C]'
+                        : 'bg-white border-[#F0E0E8] text-[#8B8B9E] hover:border-[#E91E8C]'
+                    }`}
+                  >
+                    Card
                   </button>
                 </div>
               </div>

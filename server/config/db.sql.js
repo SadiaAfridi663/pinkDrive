@@ -31,8 +31,8 @@ const runMigrations = async () => {
         const migration = require(migrationPath);
         return {
           name,
-          up: async () => migration.up(queryInterface, Sequelize),
-          down: async () => migration.down(queryInterface, Sequelize),
+          up: async (ctx) => migration.up(ctx.queryInterface, ctx.Sequelize),
+          down: async (ctx) => migration.down(ctx.queryInterface, ctx.Sequelize),
         };
       },
     },

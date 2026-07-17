@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { Radar, DollarSign } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import AddressLabel from '../components/AddressLabel';
-import { rideAPI } from '../services/api';
+import { rideAPI, sharedTripAPI } from '../services/api';
 import { useSocket } from '../context/SocketContext';
 import { SERVER_EVENTS, CLIENT_EVENTS } from '../constants/socketEvents';
 import RideRouteMap from '../components/RideRouteMap';
@@ -23,6 +23,7 @@ function DriverRidesInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [activeSharedTrip, setActiveSharedTrip] = useState(null);
   const [confirmComplete, setConfirmComplete] = useState(false);
   const [bidAmounts, setBidAmounts] = useState({});
   const [submittingBid, setSubmittingBid] = useState(null);
@@ -33,19 +34,24 @@ function DriverRidesInner() {
 
   const fetchData = async () => {
     try {
-      const [activeRes, historyRes, pendingRes] = await Promise.all([
+      const [activeRes, historyRes, pendingRes, sharedRes] = await Promise.all([
         rideAPI.getActiveRide(),
         rideAPI.getHistory().catch(() => ({ data: { data: { rides: [] } } })),
         rideAPI.getPendingRides().catch((err) => {
           if (err.response?.status !== 403) console.error('Failed to fetch pending rides:', err);
           return { data: { data: { rides: [] } } };
         }),
+        sharedTripAPI.getMyTrips().catch(() => ({ data: { data: { trips: [] } } })),
       ]);
       const active = activeRes.data.data;
       setActiveRide(active.ride);
       setActiveDriver(active.driver);
       setActivePassenger(active.passenger);
       setHistory(historyRes.data.data.rides.slice(0, 10));
+
+      const trips = sharedRes.data.data.trips || [];
+      const activeShared = trips.find(t => ['active', 'full', 'in_progress'].includes(t.status));
+      setActiveSharedTrip(activeShared || null);
 
       const restRides = (pendingRes.data.data.rides || []).map((r) => ({
         rideId: r.id,
@@ -58,6 +64,7 @@ function DriverRidesInner() {
         distance: r.distance,
         passengerOffer: r.passengerOffer,
         passengerName: r.passenger?.name,
+        passengerPhoto: r.passenger?.profilePhoto,
         createdAt: r.createdAt,
         arrivedAt: Date.now(),
       }));
@@ -477,6 +484,16 @@ function DriverRidesInner() {
         </div>
       )}
 
+      {activeSharedTrip && !activeRide && (
+        <div className="mt-6 flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse flex-shrink-0" />
+          <p className="text-sm text-amber-800 m-0">
+            You have a shared trip in progress —
+            <button onClick={() => navigate(`/driver/shared-trip/${activeSharedTrip.id}`)} className="font-bold text-amber-900 underline ml-1 bg-transparent border-none cursor-pointer">Manage Trip</button>
+          </p>
+        </div>
+      )}
+
       <div className="mt-8">
         <h3 className="font-display text-base font-semibold text-navy mb-3 tracking-[-0.01em] m-0">Available Rides ({availableRides.length})</h3>
 
@@ -491,9 +508,18 @@ function DriverRidesInner() {
             {availableRides.map((ride) => (
               <div key={ride.rideId} className="card p-5">
                 <div className="flex items-center gap-3 mb-3 p-2.5 bg-ivory rounded-sm">
-                  <div className="w-11 h-11 rounded-full bg-coral-light flex items-center justify-center text-base text-coral">
-                    {ride.passengerName?.[0] || 'P'}
-                  </div>
+                  {ride.passengerPhoto ? (
+                    <img
+                      src={ride.passengerPhoto}
+                      alt={ride.passengerName}
+                      className="w-11 h-11 rounded-full object-cover border-2 border-border"
+                      onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.textContent = ride.passengerName?.[0] || 'P'; }}
+                    />
+                  ) : (
+                    <div className="w-11 h-11 rounded-full bg-coral-light flex items-center justify-center text-base text-coral">
+                      {ride.passengerName?.[0] || 'P'}
+                    </div>
+                  )}
                   <div>
                     <p className="m-0 font-semibold text-navy text-[0.95rem]">{ride.passengerName || 'Passenger'}</p>
                     <p className="m-0 text-xs text-stone">Offers <strong>{ride.passengerOffer} PKR</strong></p>

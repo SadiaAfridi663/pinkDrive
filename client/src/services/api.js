@@ -157,6 +157,10 @@ export const sharedTripAPI = {
   boardPassenger: (tripId, requestId) => api.patch(`/shared-trips/${tripId}/passenger-board/${requestId}`),
   dropoffPassenger: (tripId, requestId) => api.patch(`/shared-trips/${tripId}/passenger-drop/${requestId}`),
   getAcceptedPassengers: (tripId) => api.get(`/shared-trips/${tripId}/accepted-passengers`),
+  leaveTrip: (tripId) => api.patch(`/shared-trips/${tripId}/leave`),
+  removePassenger: (tripId, passengerId) => api.patch(`/shared-trips/${tripId}/remove-passenger/${passengerId}`),
+  retractRequest: (tripId) => api.patch(`/shared-trips/${tripId}/retract-request`),
+  restoreState: () => api.get('/shared-trips/restore-state'),
 };
 
 export const reviewAPI = {
@@ -171,6 +175,7 @@ export const notificationAPI = {
   getUnreadCount: () => api.get('/notifications/unread-count'),
   markAsRead: (id) => api.patch(`/notifications/${id}/read`),
   markAllAsRead: () => api.post('/notifications/read-all'),
+  delete: (id) => api.delete(`/notifications/${id}`),
 };
 
 export default api;

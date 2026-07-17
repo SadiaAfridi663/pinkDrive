@@ -12,6 +12,7 @@ const NotificationContext = createContext({
   refresh: () => {},
   markRead: async () => {},
   markAllRead: async () => {},
+  removeNotification: async () => {},
 });
 
 function NotificationProvider({ children }) {
@@ -104,6 +105,14 @@ function NotificationProvider({ children }) {
     } catch { /* silent */ }
   };
 
+  const removeNotification = async (id) => {
+    try {
+      await notificationAPI.delete(id);
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+      setUnreadCount((prev) => Math.max(0, prev - (notifications.find((n) => n.id === id && !n.isRead) ? 1 : 0)));
+    } catch { /* silent */ }
+  };
+
   return (
     <NotificationContext.Provider
       value={{
@@ -113,6 +122,7 @@ function NotificationProvider({ children }) {
         refresh: fetchNotifications,
         markRead,
         markAllRead,
+        removeNotification,
       }}
     >
       {children}
