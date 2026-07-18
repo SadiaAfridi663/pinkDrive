@@ -17,6 +17,12 @@ const ROUTE_CORRIDOR_KM = 10;
 exports.createTrip = catchAsync(async (req, res, next) => {
   const { pickupLat, pickupLng, dropoffLat, dropoffLng, departureTime, availableSeats, pricePerSeat, paymentMethod } = req.body;
 
+
+  const departure = new Date(departureTime);
+  if (departure < new Date()) {
+    return next(new AppError('Departure time cannot be in the past.', 400));
+  }
+
   if (!pickupLat || !pickupLng || !dropoffLat || !dropoffLng || !departureTime || !availableSeats || !pricePerSeat) {
     return next(new AppError('All fields are required: pickup, dropoff, departure time, seats, price.', 400));
   }
@@ -47,7 +53,7 @@ exports.createTrip = catchAsync(async (req, res, next) => {
     dropoffLat,
     dropoffLng,
     dropoffAddress,
-    departureTime: new Date(departureTime),
+    departureTime: departure,
     availableSeats: parseInt(availableSeats, 10),
     pricePerSeat: parseFloat(pricePerSeat),
     paymentMethod: paymentMethod || 'cash',
@@ -177,7 +183,8 @@ exports.getMyRequests = catchAsync(async (req, res, next) => {
 
 exports.requestJoin = catchAsync(async (req, res, next) => {
   const { tripId } = req.params;
-  const { pickupLat, pickupLng, dropoffLat, dropoffLng } = req.body;
+  const { pickupLat, pickupLng, dropoffLat, dropoffLng, requestedSeats } = req.body;
+  const seatsRequested = parseInt(requestedSeats, 10) || 1;
 
   if (!pickupLat || !pickupLng || !dropoffLat || !dropoffLng) {
     return next(new AppError('Pickup and dropoff locations are required.', 400));
@@ -198,7 +205,6 @@ exports.requestJoin = catchAsync(async (req, res, next) => {
   const trip = await SharedTrip.findByPk(tripId);
   if (!trip) return next(new AppError('Trip not found.', 404));
   if (trip.status !== 'active') return next(new AppError('This trip is no longer accepting requests.', 400));
-  if (trip.availableSeats < 1) return next(new AppError('No seats available on this trip.', 400));
   if (trip.driverId === req.user.id) return next(new AppError('You cannot request your own trip.', 400));
 
   try {
@@ -226,6 +232,7 @@ exports.requestJoin = catchAsync(async (req, res, next) => {
     dropoffLat,
     dropoffLng,
     dropoffAddress,
+    requestedSeats: seatsRequested,
     status: 'pending',
   });
 
@@ -328,12 +335,12 @@ exports.acceptRequest = catchAsync(async (req, res, next) => {
     if (!tr) throw new AppError('Trip not found.', 404);
     if (tr.driverId !== req.user.id) throw new AppError('Unauthorized.', 403);
     if (tr.status !== 'active') throw new AppError('Trip is no longer active.', 400);
-    if (tr.availableSeats < 1) throw new AppError('No seats available.', 400);
 
     r.status = 'accepted';
     await r.save({ transaction: t });
 
-    tr.availableSeats = tr.availableSeats - 1;
+    const seatDelta = Math.min(r.requestedSeats || 1, tr.availableSeats);
+    tr.availableSeats = tr.availableSeats - seatDelta;
     if (tr.availableSeats <= 0) {
       tr.availableSeats = 0;
       tr.status = 'full';
@@ -522,11 +529,13 @@ exports.cancelTrip = catchAsync(async (req, res, next) => {
     if (tr.driverId !== req.user.id) throw new AppError('Unauthorized.', 403);
     if (!['active', 'full'].includes(tr.status)) throw new AppError('Trip cannot be cancelled in its current state.', 400);
 
-    const acceptedCount = await TripRequest.count({
+    const acceptedReqs = await TripRequest.findAll({
       where: { tripId, status: 'accepted' },
+      attributes: ['requestedSeats'],
       transaction: t,
     });
-    tr.availableSeats = tr.availableSeats + acceptedCount;
+    const totalAcceptedSeats = acceptedReqs.reduce((sum, r) => sum + (r.requestedSeats || 1), 0);
+    tr.availableSeats = tr.availableSeats + totalAcceptedSeats;
 
     await TripRequest.update(
       { status: 'cancelled' },
@@ -599,7 +608,7 @@ exports.leaveTrip = catchAsync(async (req, res, next) => {
     reqRec.status = 'cancelled';
     await reqRec.save({ transaction: t });
 
-    tr.availableSeats = tr.availableSeats + 1;
+    tr.availableSeats = tr.availableSeats + (reqRec.requestedSeats || 1);
     if (tr.status === 'full') tr.status = 'active';
     await tr.save({ transaction: t });
 
@@ -675,7 +684,7 @@ exports.removePassenger = catchAsync(async (req, res, next) => {
     reqRec.status = 'cancelled';
     await reqRec.save({ transaction: t });
 
-    tr.availableSeats = tr.availableSeats + 1;
+    tr.availableSeats = tr.availableSeats + (reqRec.requestedSeats || 1);
     if (tr.status === 'full') tr.status = 'active';
     await tr.save({ transaction: t });
 

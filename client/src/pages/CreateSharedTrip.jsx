@@ -25,6 +25,7 @@ function CreateSharedTrip() {
   const [pricePerSeat, setPricePerSeat] = useState(50);
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [submitting, setSubmitting] = useState(false);
+  const [timeError, setTimeError] = useState('');
   const [activeSharedTrip, setActiveSharedTrip] = useState(null);
   const geo = useGeolocation();
 
@@ -33,33 +34,51 @@ function CreateSharedTrip() {
       const trips = res.data.data.trips || [];
       const active = trips.find(t => ['active', 'full', 'in_progress'].includes(t.status));
       setActiveSharedTrip(active || null);
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
+
+  useEffect(() => {
+    if (!departureDate || !departureTime) {
+      setTimeError('');
+      return;
+    }
+    const selected = new Date(`${departureDate}T${departureTime}`);
+    if (selected < new Date()) {
+      setTimeError('Departure time must be in the future.');
+    } else {
+      setTimeError('');
+    }
+  }, [departureDate, departureTime]);
 
   const handleSubmit = async () => {
     if (!pickup || !dropoff || !departureDate || !departureTime) return;
+
+    const selected = new Date(`${departureDate}T${departureTime}`);
+    if (selected < new Date()) {
+      toast?.showToast?.('Departure time cannot be in the past.', 'error');
+      return;
+    }
+
     setSubmitting(true);
     try {
-      const departureDateTime = new Date(`${departureDate}T${departureTime}`);
       await sharedTripAPI.create({
         pickupLat: pickup.lat,
         pickupLng: pickup.lng,
         dropoffLat: dropoff.lat,
         dropoffLng: dropoff.lng,
-        departureTime: departureDateTime.toISOString(),
+        departureTime: selected.toISOString(),
         availableSeats,
         pricePerSeat,
         paymentMethod,
       });
-      toast?.show?.('Shared trip created! Passengers will be notified along your route.', 'success');
+      toast?.showToast?.('Shared trip created!', 'success');
       navigate('/driver/dashboard');
     } catch (err) {
-      toast?.show?.(err.response?.data?.message || 'Failed to create trip.', 'error');
+      toast?.showToast?.(err.response?.data?.message || 'Failed to create trip.', 'error');
     } finally {
       setSubmitting(false);
     }
   };
-
   return (
     <div className="w-full max-w-2xl mx-auto p-5 lg:p-8">
       <div className="bg-white rounded-2xl border border-[#F0E0E8] shadow-sm overflow-hidden">
@@ -160,6 +179,12 @@ function CreateSharedTrip() {
                   onChange={(e) => setDepartureTime(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border border-[#F0E0E8] text-sm focus:outline-none focus:border-[#E91E8C] focus:ring-1 focus:ring-[#E91E8C] bg-white"
                 />
+                {timeError && (
+                  <p className="text-sm text-red-500 mt-2 flex items-center gap-1.5">
+                    <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                    {timeError}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-semibold text-[#1A1A1A] mb-2">Available Seats</label>
@@ -168,11 +193,10 @@ function CreateSharedTrip() {
                     <button
                       key={n}
                       onClick={() => setAvailableSeats(n)}
-                      className={`flex-1 py-3 rounded-xl text-sm font-bold border-2 transition cursor-pointer ${
-                        availableSeats === n
-                          ? 'bg-[#FCE4EC] border-[#E91E8C] text-[#E91E8C]'
-                          : 'bg-white border-[#F0E0E8] text-[#8B8B9E] hover:border-[#E91E8C]'
-                      }`}
+                      className={`flex-1 py-3 rounded-xl text-sm font-bold border-2 transition cursor-pointer ${availableSeats === n
+                        ? 'bg-[#FCE4EC] border-[#E91E8C] text-[#E91E8C]'
+                        : 'bg-white border-[#F0E0E8] text-[#8B8B9E] hover:border-[#E91E8C]'
+                        }`}
                     >
                       {n}
                     </button>
@@ -197,31 +221,28 @@ function CreateSharedTrip() {
                 <div className="flex gap-3">
                   <button
                     onClick={() => setPaymentMethod('cash')}
-                    className={`flex-1 py-3 rounded-xl text-sm font-bold border-2 transition cursor-pointer ${
-                      paymentMethod === 'cash'
-                        ? 'bg-[#FCE4EC] border-[#E91E8C] text-[#E91E8C]'
-                        : 'bg-white border-[#F0E0E8] text-[#8B8B9E] hover:border-[#E91E8C]'
-                    }`}
+                    className={`flex-1 py-3 rounded-xl text-sm font-bold border-2 transition cursor-pointer ${paymentMethod === 'cash'
+                      ? 'bg-[#FCE4EC] border-[#E91E8C] text-[#E91E8C]'
+                      : 'bg-white border-[#F0E0E8] text-[#8B8B9E] hover:border-[#E91E8C]'
+                      }`}
                   >
                     Cash
                   </button>
                   <button
                     onClick={() => setPaymentMethod('wallet')}
-                    className={`flex-1 py-3 rounded-xl text-sm font-bold border-2 transition cursor-pointer ${
-                      paymentMethod === 'wallet'
-                        ? 'bg-[#FCE4EC] border-[#E91E8C] text-[#E91E8C]'
-                        : 'bg-white border-[#F0E0E8] text-[#8B8B9E] hover:border-[#E91E8C]'
-                    }`}
+                    className={`flex-1 py-3 rounded-xl text-sm font-bold border-2 transition cursor-pointer ${paymentMethod === 'wallet'
+                      ? 'bg-[#FCE4EC] border-[#E91E8C] text-[#E91E8C]'
+                      : 'bg-white border-[#F0E0E8] text-[#8B8B9E] hover:border-[#E91E8C]'
+                      }`}
                   >
                     Wallet
                   </button>
                   <button
                     onClick={() => setPaymentMethod('stripe')}
-                    className={`flex-1 py-3 rounded-xl text-sm font-bold border-2 transition cursor-pointer ${
-                      paymentMethod === 'stripe'
-                        ? 'bg-[#FCE4EC] border-[#E91E8C] text-[#E91E8C]'
-                        : 'bg-white border-[#F0E0E8] text-[#8B8B9E] hover:border-[#E91E8C]'
-                    }`}
+                    className={`flex-1 py-3 rounded-xl text-sm font-bold border-2 transition cursor-pointer ${paymentMethod === 'stripe'
+                      ? 'bg-[#FCE4EC] border-[#E91E8C] text-[#E91E8C]'
+                      : 'bg-white border-[#F0E0E8] text-[#8B8B9E] hover:border-[#E91E8C]'
+                      }`}
                   >
                     Card
                   </button>
@@ -237,7 +258,7 @@ function CreateSharedTrip() {
                 </button>
                 <button
                   onClick={handleSubmit}
-                  disabled={submitting || !departureDate || !departureTime}
+                  disabled={submitting || !departureDate || !departureTime || !!timeError}
                   className="flex-1 bg-[#E91E8C] text-white font-bold py-3.5 rounded-xl hover:bg-[#C2185B] transition cursor-pointer border-none disabled:opacity-50"
                 >
                   {submitting ? 'Creating...' : 'Create Trip'}

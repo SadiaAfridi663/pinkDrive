@@ -91,7 +91,13 @@ function MapLocationPicker({ onSelect, label, initialPosition: rawPos, otherMark
     prevPosRef.current = initialPosition;
     mapRef.current.setView([initialPosition.lat, initialPosition.lng], DEFAULT_ZOOM);
     mapRef.current.invalidateSize();
-    if (markerRef.current) {
+    if (!markerRef.current) {
+      markerRef.current = L.marker([initialPosition.lat, initialPosition.lng], { draggable: true }).addTo(mapRef.current);
+      markerRef.current.on('dragend', () => {
+        const pos = markerRef.current.getLatLng();
+        onSelect({ lat: pos.lat, lng: pos.lng });
+      });
+    } else {
       markerRef.current.setLatLng([initialPosition.lat, initialPosition.lng]);
     }
   }, [initialPosition]);

@@ -41,6 +41,11 @@ const TripRequest = sequelize.define('TripRequest', {
     type: DataTypes.TEXT,
     allowNull: true,
   },
+  requestedSeats: {
+    type: DataTypes.INTEGER,
+    defaultValue: 1,
+    validate: { min: 1 },
+  },
   status: {
     type: DataTypes.STRING,
     defaultValue: 'pending',
