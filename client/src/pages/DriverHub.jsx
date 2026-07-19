@@ -504,21 +504,35 @@ function DriverHub() {
     driverAPI.getStatus().then(r => setVerData(r.data.data)).catch(() => setVerData({ status: 'not_submitted', isDriverVerified: false }));
   }, []);
   const isVerified = verData?.status === 'approved';
+  const isRejected = verData?.status === 'rejected';
 
   const verified = verData?.status === 'approved';
 
-  const views = {
+  const sharedViews = {
     dashboard: { label: 'Dashboard', subtitle: 'Earnings at a glance', icon: 'dashboard', component: DashboardView },
+  };
+
+  const verifiedViews = {
     rides: { label: 'Rides', subtitle: 'Accept and manage rides', icon: 'car', component: DriverRides },
     'trip-requests': { label: 'Trip Requests', subtitle: 'Passengers requesting seats', icon: 'carPlus', component: TripRequestsView },
     earnings: { label: 'Earnings', subtitle: 'Track your revenue', icon: 'chart', component: DriverEarnings },
     withdraw: { label: 'Withdraw', subtitle: 'Request a payout', icon: 'walletArrow', component: DriverWithdraw },
-    documents: { label: 'Documents', subtitle: verified ? 'Verification approved' : 'Verification documents', icon: 'fileCheck', component: DriverVerification },
+    documents: { label: 'Documents', subtitle: 'Verification approved', icon: 'fileCheck', component: DriverVerification },
   };
 
+  const rejectedViews = {
+    documents: { label: 'Documents', subtitle: 'Re-upload required', icon: 'fileCheck', component: DriverVerification },
+  };
+
+  let views = sharedViews;
+  if (isVerified) {
+    views = { ...sharedViews, ...verifiedViews };
+  } else if (isRejected) {
+    views = { ...sharedViews, ...rejectedViews };
+  }
+
   const tabParam = searchParams.get('tab');
-  const validTabs = views;
-  const defaultTab = tabParam && validTabs[tabParam] ? tabParam : 'dashboard';
+  const defaultTab = tabParam && views[tabParam] ? tabParam : (isVerified ? 'dashboard' : 'documents');
 
   return (
     <DashboardLayout
