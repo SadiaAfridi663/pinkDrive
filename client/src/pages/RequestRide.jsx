@@ -20,10 +20,9 @@ function PrivateRideFlow({
   paymentMethod, setPaymentMethod,
   nearbyDrivers, serviceAreas, stripeConfigured, walletBalance,
   passengerOffer, setPassengerOffer, error, setError,
-  loading, setLoading, distance,
+  loading, setLoading, distance, position,
 }) {
   const navigate = useNavigate();
-  const { position } = useGeolocation();
 
   const handleSelfieCapture = useCallback((dataUrl) => setSelfieDataUrl(dataUrl), [setSelfieDataUrl]);
 
@@ -280,9 +279,8 @@ function PrivateRideFlow({
 }
 
 function SharedTripFlow({
-  walletBalance, serviceAreas, onRequestJoin, loading,
+  walletBalance, serviceAreas, onRequestJoin, loading, position,
 }) {
-  const { position } = useGeolocation();
   const [pickup, setPickup] = useState(null);
   const [pickupAddress, setPickupAddress] = useState('');
   const [dropoff, setDropoff] = useState(null);
@@ -753,11 +751,13 @@ function RequestRideInner() {
             error={error} setError={setError}
             loading={loading} setLoading={setLoading}
             distance={distance}
+            position={position}
           />
         ) : (
           <SharedTripFlow
             walletBalance={walletBalance}
             serviceAreas={serviceAreas}
+            position={position}
           />
         )}
       </div>

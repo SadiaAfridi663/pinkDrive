@@ -8,6 +8,7 @@ import DriverRides from './DriverRides';
 import DriverEarnings from './DriverEarnings';
 import DriverWithdraw from './DriverWithdraw';
 import DriverVerification from './DriverVerification';
+import CreateSharedTrip from './CreateSharedTrip';
 import DeclineReasonModal from '../components/DeclineReasonModal';
 import RideRouteMap from '../components/RideRouteMap';
 
@@ -515,9 +516,9 @@ function DriverHub() {
   const verifiedViews = {
     rides: { label: 'Rides', subtitle: 'Accept and manage rides', icon: 'car', component: DriverRides },
     'trip-requests': { label: 'Trip Requests', subtitle: 'Passengers requesting seats', icon: 'carPlus', component: TripRequestsView },
+    'create-trip': { label: 'Share Trip', subtitle: 'Offer seats along your route', icon: 'carPlus', component: CreateSharedTrip },
     earnings: { label: 'Earnings', subtitle: 'Track your revenue', icon: 'chart', component: DriverEarnings },
     withdraw: { label: 'Withdraw', subtitle: 'Request a payout', icon: 'walletArrow', component: DriverWithdraw },
-    documents: { label: 'Documents', subtitle: 'Verification approved', icon: 'fileCheck', component: DriverVerification },
   };
 
   const rejectedViews = {

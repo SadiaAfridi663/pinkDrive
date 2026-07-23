@@ -8,6 +8,8 @@ const NAV_ITEMS = {
   passenger: [
     { to: '/passenger', label: 'Dashboard', icon: 'dashboard' },
     { to: '/ride/request', label: 'Book a Ride', icon: 'carPlus' },
+    { to: '/passenger?tab=history', label: 'History', icon: 'clock' },
+    { to: '/passenger?tab=my-shared-trips', label: 'My Shared Trips', icon: 'carPlus' },
     { to: '/wallet', label: 'Wallet', icon: 'wallet' },
     { to: '/emergency-contacts', label: 'Emergency', icon: 'shield' },
   ],
@@ -15,6 +17,8 @@ const NAV_ITEMS = {
     { to: '/driver/dashboard', label: 'Dashboard', icon: 'dashboard' },
     { to: '/driver/rides', label: 'Rides', icon: 'car' },
     { to: '/driver/create-trip', label: 'Share Trip', icon: 'carPlus' },
+    { to: '/driver/dashboard?tab=trip-requests', label: 'Trip Requests', icon: 'carPlus' },
+    { to: '/driver/verification', label: 'Documents', icon: 'fileCheck' },
     { to: '/wallet', label: 'Wallet', icon: 'wallet' },
     { to: '/wallet/earnings', label: 'Earnings', icon: 'chart' },
     { to: '/wallet/withdraw', label: 'Withdraw', icon: 'walletArrow' },
@@ -92,8 +96,9 @@ function DashboardLayout({ views, defaultTab, children, title, subtitle }) {
 
   const isActive = (path) => {
     if (isTabMode) return activeTab === path;
-    if (path === '/admin') return location.pathname === '/admin';
-    return location.pathname.startsWith(path);
+    const pathOnly = path.split('?')[0];
+    if (pathOnly === '/admin') return location.pathname === '/admin';
+    return location.pathname.startsWith(pathOnly);
   };
 
   const handleLogout = async () => {
@@ -130,7 +135,7 @@ function DashboardLayout({ views, defaultTab, children, title, subtitle }) {
 
         <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
           {navItems.map((item) => {
-            const badgeKey = BADGE_MAP[item.to];
+            const badgeKey = BADGE_MAP[item.to.split('?')[0]] || BADGE_MAP[item.to];
             const badgeCount = badgeKey ? counts[badgeKey] : 0;
             const active = isActive(item.to);
 
