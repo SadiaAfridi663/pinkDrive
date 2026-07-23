@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import AddressLabel from './AddressLabel';
+import { driverAPI } from '../services/api';
 
 const API_URL = import.meta.env.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace('/api', '')
@@ -20,6 +21,10 @@ function haversine(lat1, lng1, lat2, lng2) {
 function SharedTripCard({ trip, requestedSeats, passengerPickup, passengerDropoff, onRequestJoin, disabled }) {
   const [imgError, setImgError] = useState(false);
   const [visible, setVisible] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [profileData, setProfileData] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState('');
 
   useEffect(() => {
     const timer = setTimeout(() => setVisible(true), 50);
@@ -43,14 +48,47 @@ function SharedTripCard({ trip, requestedSeats, passengerPickup, passengerDropof
     ? trip.driverName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
     : 'DR';
 
+  const handleViewProfile = async (e) => {
+    e.stopPropagation();
+    if (profileData) { setShowProfile(true); return; }
+    setProfileLoading(true);
+    setProfileError('');
+    try {
+      const res = await driverAPI.getProfile(trip.driverId);
+      setProfileData(res.data.data);
+      setShowProfile(true);
+    } catch (err) {
+      setProfileError(err.response?.data?.message || 'Failed to load profile.');
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const renderStars = (rating) => {
+    const full = Math.floor(rating);
+    const half = rating % 1 >= 0.5;
+    const stars = [];
+    for (let i = 0; i < 5; i++) {
+      if (i < full) stars.push('full');
+      else if (i === full && half) stars.push('half');
+      else stars.push('empty');
+    }
+    return stars;
+  };
+
   return (
+    <>
     <div
       className={`bg-white rounded-2xl border border-[#EDE4EB] shadow-sm overflow-hidden transition-all duration-500 ease-out ${
         visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
       } hover:shadow-md hover:border-[#DDB8D0] group`}
     >
       <div className="p-4 lg:p-5">
-        <div className="flex items-start gap-3.5 mb-4">
+        <button
+          onClick={handleViewProfile}
+          disabled={profileLoading}
+          className="w-full flex items-start gap-3.5 mb-4 text-left border-none bg-transparent cursor-pointer p-0 transition-opacity hover:opacity-80 disabled:opacity-50"
+        >
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#FCE4EC] to-[#F8BBD0] flex-shrink-0 overflow-hidden ring-2 ring-[#FCE4EC]">
             {photoUrl ? (
               <img src={photoUrl} alt="" className="w-full h-full object-cover" onError={() => setImgError(true)} />
@@ -68,11 +106,12 @@ function SharedTripCard({ trip, requestedSeats, passengerPickup, passengerDropof
                 {trip.driverRating || '4.5'}
               </span>
             </div>
-            <p className="text-xs text-[#8B6F80] m-0 mt-0.5">
+            <p className="text-xs text-[#8B6F80] m-0 mt-0.5 flex items-center gap-1">
               {trip.vehicleInfo || 'Shared Trip'}
+              <svg className="w-3 h-3 ml-auto text-[#DDB8D0]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg>
             </p>
           </div>
-        </div>
+        </button>
 
         <div className="relative pl-5 pb-2 mb-3 border-l-2 border-[#EDE4EB]">
           <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-[#E91E8C] ring-2 ring-[#FCE4EC]" />
@@ -158,6 +197,65 @@ function SharedTripCard({ trip, requestedSeats, passengerPickup, passengerDropof
         )}
       </button>
     </div>
+
+    {showProfile && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => { setShowProfile(false); setProfileError(''); }}>
+        <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between mb-5">
+            <h3 className="text-lg font-bold text-[#880E4F] m-0">Driver Profile</h3>
+            <button onClick={() => { setShowProfile(false); setProfileError(''); }} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#FFF8FA] text-[#8B8B9E] transition cursor-pointer border-none bg-transparent">
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18" /><path d="M6 6l12 12" /></svg>
+            </button>
+          </div>
+
+          {profileLoading ? (
+            <div className="flex flex-col items-center py-6 space-y-4">
+              <div className="w-20 h-20 rounded-full bg-gray-200 animate-pulse" />
+              <div className="h-5 bg-gray-200 rounded w-32 animate-pulse" />
+              <div className="h-4 bg-gray-200 rounded w-24 animate-pulse" />
+            </div>
+          ) : profileError ? (
+            <div className="text-center py-6">
+              <p className="text-sm text-red-500 m-0 mb-4">{profileError}</p>
+              <button onClick={() => { setShowProfile(false); setProfileError(''); }} className="bg-[#E91E8C] text-white font-bold text-sm py-2 px-5 rounded-xl hover:bg-[#C2185B] transition cursor-pointer border-none">Close</button>
+            </div>
+          ) : profileData ? (
+            <>
+              <div className="flex flex-col items-center text-center mb-5">
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#FCE4EC] to-[#F8BBD0] flex items-center justify-center text-2xl font-bold text-[#880E4F] mb-3 border-2 border-[#FCE4EC] overflow-hidden">
+                  {profileData.profilePhoto ? (
+                    <img src={profileData.profilePhoto.startsWith('http') ? profileData.profilePhoto : `${API_URL}/${profileData.profilePhoto.replace(/\\/g, '/')}`} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    (profileData.name || 'D')[0]
+                  )}
+                </div>
+                <p className="text-lg font-bold text-[#1A1A1A] m-0">{profileData.name}</p>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <div className="flex items-center gap-0.5">
+                    {renderStars(parseFloat(profileData.rating || 0)).map((s, i) => (
+                      <svg key={i} className="w-4 h-4 text-amber-500" viewBox="0 0 24 24" fill={s === 'full' ? 'currentColor' : s === 'half' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={s === 'empty' ? 2 : 0}>
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                      </svg>
+                    ))}
+                  </div>
+                  <span className="text-sm font-semibold text-[#8B6F80]">
+                    {profileData.rating || '0'} ({profileData.reviewCount || 0} reviews)
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="bg-[#FFF8FA] rounded-xl p-4">
+                  <p className="text-[0.55rem] font-bold text-[#8B8B9E] uppercase tracking-wider m-0 mb-1">Phone</p>
+                  <p className="text-sm text-[#1A1A1A] m-0 font-mono">{profileData.phone || 'Not provided'}</p>
+                </div>
+              </div>
+            </>
+          ) : null}
+        </div>
+      </div>
+    )}
+  </>
   );
 }
 
